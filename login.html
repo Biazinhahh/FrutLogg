@@ -30,19 +30,10 @@
         <div class="input-field">
           <label class="sr-only" for="senha">Senha</label>
           <i class="fa-solid fa-lock icon-left" aria-hidden="true"></i>
-          <input type="password" id="senha" name="senha" placeholder="Digite sua senha" autocomplete="current-password" minlength="8" required>
+          <input type="password" id="senha" name="senha" placeholder="Digite sua senha" autocomplete="current-password" minlength="8" maxlength="10" required>
           <button type="button" class="btn-toggle-senha" id="togglePassword" aria-label="Mostrar senha">
             <i class="fa-solid fa-eye" aria-hidden="true"></i>
           </button>
-        </div>
-
-        <div class="campo-demo" id="campo-perfil-demo">
-          <label for="perfil-demo">Perfil da demonstracao</label>
-          <select id="perfil-demo" name="perfilDemo">
-            <option value="engenheiro">Engenheiro</option>
-            <option value="tecnico">Tecnico</option>
-            <option value="admin">Admin</option>
-          </select>
         </div>
 
         <p class="mensagem-feedback" id="mensagem-login" aria-live="polite"></p>

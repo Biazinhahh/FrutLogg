@@ -31,9 +31,21 @@
 
 .barra-edicao-talhao {
   display: flex;
+  align-items: center;
   gap: 6px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.barra-edicao-talhao label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.barra-edicao-talhao input {
+  width: 120px;
+  min-height: 38px;
+  padding: 6px 8px;
 }
 
 .barra-edicao-talhao .btn-filtro:disabled {
@@ -146,5 +158,11 @@
 
   .barra-edicao-talhao .btn-filtro {
     flex: 1 1 calc(50% - 6px);
+  }
+}
+
+@media (max-width: 900px) {
+  #cadastro-plantio .info-grid-cadastro {
+    grid-template-columns: 1fr;
   }
 }

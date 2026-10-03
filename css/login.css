@@ -178,6 +178,18 @@
   opacity: 0.75;
 }
 
+.caixa-do-login2 .mensagem-feedback {
+  color: #e2ded8;
+}
+
+.caixa-do-login2 .mensagem-feedback.erro {
+  color: #ff8a80;
+}
+
+.caixa-do-login2 .mensagem-feedback.sucesso {
+  color: #a5d6a7;
+}
+
 @media (max-width: 760px) {
   .login {
     flex-direction: column;

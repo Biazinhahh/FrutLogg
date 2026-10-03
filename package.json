@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node --env-file=.env server.js",
     "dev": "node --env-file=.env --watch server.js",
-    "password-hash": "node scripts/password-hash.js"
+    "password-hash": "node scripts/password-hash.js",
+    "bootstrap-admin": "node --env-file=.env scripts/bootstrap-admin.js"
   }
 }

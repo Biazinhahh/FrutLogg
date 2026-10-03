@@ -1,346 +1,154 @@
-<<<<<<< HEAD
-# FrutLog — backend IoT seguro
+# FrutLog — Sistema de Gestão Agrícola e Monitoramento IoT
 
-## Integração MQTT ↔ backend
+Sistema web completo para gestão agrícola, monitoramento de talhões com sensores IoT, acompanhamento de telemetria em tempo real, registro de inspeções de campo e controle administrativo de usuários.
 
-O frontend não deve conectar ao broker MQTT nem possuir credenciais de IoT. Use
-esta arquitetura:
+---
+
+## 🌾 Sobre o Projeto
+
+O **FrutLog** centraliza o ciclo operacional do cultivo agrícola através de painéis especializados por perfil de atuação:
+
+*   **Engenheiro Agrônomo:** Edição sincronizada da geometria e da área dos talhões, acompanhamento de dados reais de sensores e cadastro de ciclos de plantio.
+*   **Técnico Agrícola:** Monitoramento de campo, inspeções, ocorrências, problemas em sensores e envio de relatório diário.
+*   **Administrador:** Gestão de funcionários e sensores, dados operacionais consolidados, mapa e acompanhamento de relatórios.
+
+---
+
+## 🏛️ Arquitetura do Sistema
+
+A arquitetura do FrutLog é projetada para garantir segurança, desacoplamento e integridade dos dados:
 
 ```text
-Sensor/ESP32 -- MQTT com TLS --> Broker -- MQTT com TLS --> Ponte privada -- HTTPS --> API FrutLog --> Supabase
+[Sensores / ESP32]
+       │ (MQTT c/ TLS porta 8883)
+       ▼
+ [Broker MQTT] (Mosquitto / EMQX)
+       │ (Assinatura privada frutlog/+/telemetria)
+       ▼
+ [Ponte Privada Node.js]
+       │ (HTTPS POST /api/iot/telemetria c/ X-IoT-Key)
+       ▼
+ [Backend API Node.js] (api/[...route].js)
+       │ (PostgREST c/ Service Role)
+       ▼
+ [Banco de Dados Supabase / PostgreSQL] (Modelo Operacional Singular)
+       ▲
+       │ (Sessão JWT Bearer / HTTPS)
+ [Frontend Web] (Dashboards Engenheiro, Técnico e Admin)
 ```
 
-A ponte é um serviço Node.js, container ou VPS que mantém a assinatura MQTT,
-valida tópico e JSON, e chama `POST /api/iot/telemetria`. Não use uma função
-serverless comum para a ponte: a conexão MQTT deve permanecer aberta.
+> [!IMPORTANT]
+> O frontend nunca se conecta diretamente ao broker MQTT nem armazena chaves de serviço do banco. Toda a comunicação de IoT passa pela ponte privada autenticada.
 
-### Broker, tópicos e ACL
+---
 
-Use Mosquitto, EMQX ou HiveMQ com TLS na porta `8883`. Crie uma credencial para
-cada sensor e outra, apenas de leitura, para a ponte. O tópico padrão é:
+## 💾 Banco de Dados Consolidado (Supabase)
 
-```text
-frutlog/<SENSOR_ID>/telemetria
-```
+O banco de dados foi unificado no **modelo operacional singular**. O esquema cria estrutura, restrições, índices, triggers, views e partições, mas não insere usuários, fazendas, talhões, sensores ou registros operacionais de exemplo:
 
-Exemplo: `frutlog/SOLO-A2-01/telemetria`.
+📁 [`supabase/schema.sql`](supabase/schema.sql)
 
-Configure ACL para que cada dispositivo publique somente no seu próprio tópico,
-sem permissão de assinar `#`. A ponte assina somente `frutlog/+/telemetria`.
-Use QoS 1 e `retain: false`.
+### Tabelas Principais
+*   `organizacao`: Entidade gestora da propriedade.
+*   `usuario`: Contas com perfis (`administrador`, `engenheiro`, `tecnico`) e senha com hash seguro PBKDF2.
+*   `fazenda`: Propriedade rural vinculada à organização.
+*   `talhao`: Talhões e geometrias cadastrados para cada fazenda.
+*   `cultura` e `cultivar`: Espécies e variedades plantadas.
+*   `ciclo_cultura`: Safras e ciclos ativos de plantio.
+*   `dispositivo` e `sensor`: Hardwares e grandezas monitoradas (`temperatura`, `umidadeSolo`, `umidadeAr`, `chuva`).
+*   `leitura_sensor`: Histórico de telemetria registrado.
+*   `inspecao`, `ocorrencia`, `problema_sensor`: Registros operacionais de campo.
+*   `colheita`: Histórico anual de produtividade.
 
-### Payload aceito
+---
 
-```json
-{
-  "sensorId": "SOLO-A2-01",
-  "talhao": "A2",
-  "tipo": "umidadeSolo",
-  "valor": 32.4,
-  "unidade": "%",
-  "timestamp": "2026-09-22T14:30:00.000Z"
-}
-```
+## 🚀 Como Executar o Projeto
 
-Obrigatórios: `sensorId`, `talhao`, `tipo` e `valor`. Tipos aceitos:
-`temperatura`, `umidadeSolo`, `umidadeAr` e `chuva`. O `timestamp` é opcional.
-O `sensorId` no JSON deve ser igual ao ID presente no tópico.
+### 1. Configurar o Banco de Dados
+1. Em uma instalação nova, abra o **SQL Editor** do Supabase e execute `supabase/schema.sql`.
+2. Execute, na ordem, `supabase/006_particionamento_dinamico_telemetria.sql`, `supabase/007_admin_and_map_sync.sql`, `supabase/008_relatorios_diarios.sql`, `supabase/009_bootstrap_super_admin.sql`, `supabase/010_alertas_de_campo.sql`, `supabase/011_profissao_usuario.sql`, `supabase/012_bootstrap_admin_login.sql`, `supabase/015_reparar_esquema_operacional.sql`, `supabase/016_reparar_painel_engenheiro.sql` e `supabase/017_corrigir_codigo_ambiguo_talhoes.sql` para instalar particionamento de telemetria, sincronização de mapas, credenciais provisórias, relatórios diários, bootstrap inicial, alertas de campo, profissão no cadastro da equipe, matrícula `admin` e reparar as tabelas de colheitas, sensores, plantios, mapas e salvamento de geometrias.
+3. Não execute importações legadas para inicializar uma instalação vazia. Em ambientes existentes, preserve e revise os dados antes de aplicar qualquer script de migração.
 
-### Ponte de ingestão
-
-Em um projeto separado, instale o cliente:
-
-```powershell
-npm install mqtt
-```
-
-```js
-const mqtt = require("mqtt");
-
-const client = mqtt.connect(process.env.MQTT_URL, {
-  username: process.env.MQTT_USERNAME,
-  password: process.env.MQTT_PASSWORD,
-  clientId: `frutlog-bridge-${process.env.HOSTNAME || "local"}`,
-  clean: false,
-  reconnectPeriod: 5000,
-  rejectUnauthorized: true,
-});
-
-client.on("connect", () => client.subscribe("frutlog/+/telemetria", { qos: 1 }));
-client.on("message", async (topic, buffer) => {
-  try {
-    const body = JSON.parse(buffer.toString("utf8"));
-    if (body.sensorId !== topic.split("/")[1]) throw new Error("sensorId diverge do tópico");
-    const response = await fetch(`${process.env.FRUTLOG_API_URL}/api/iot/telemetria`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-IoT-Key": process.env.IOT_API_KEY },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error(`API respondeu ${response.status}`);
-  } catch (error) {
-    console.error("Mensagem MQTT rejeitada:", error.message);
-  }
-});
-
-client.on("error", (error) => console.error("Erro MQTT:", error.message));
-```
-
-Variáveis de ambiente da ponte:
+### 2. Configurar Variáveis de Ambiente
+Copie o arquivo `.env.example` para `.env` e preencha as credenciais:
 
 ```env
-MQTT_URL=mqtts://broker.exemplo.com:8883
-MQTT_USERNAME=usuario-da-ponte
-MQTT_PASSWORD=senha-da-ponte
-FRUTLOG_API_URL=https://api.seu-dominio.com
-IOT_API_KEY=mesma-chave-configurada-no-backend
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_SECRET_KEY=sua-chave-service-role
+JWT_SECRET=gere-uma-chave-aleatoria-com-pelo-menos-32-caracteres
+IOT_API_KEY=gere-uma-chave-forte-para-os-dispositivos
+FRONTEND_ORIGIN=http://localhost:5500
+PORT=3000
+BOOTSTRAP_ADMIN_PASSWORD=
+THINGSPEAK_CHANNEL_ID=id-do-canal
+THINGSPEAK_READ_API_KEY=chave-de-leitura-privada
+THINGSPEAK_FIELD_TEMPERATURE=1
+THINGSPEAK_FIELD_HUMIDITY=2
+THINGSPEAK_FIELD_SOIL_HUMIDITY=3
+THINGSPEAK_FIELD_RAINFALL=4
 ```
 
-Guarde-as em um cofre de segredos. `IOT_API_KEY` fica exclusivamente entre a
-ponte e a API — nunca no sensor ou navegador.
+Preencha os valores ThingSpeak com o canal real do hardware e mantenha a chave de leitura apenas no `.env` do servidor. Os números de campo são ajustáveis caso o firmware publique métricas em outra ordem.
 
-### Banco e teste
+As senhas novas, temporárias ou alteradas devem possuir de 8 a 10 caracteres. Esta validação também é aplicada no endpoint de login; contas existentes com senhas maiores que 10 caracteres precisarão ter a credencial redefinida antes de adotar esta versão.
 
-O dispositivo precisa existir, estar ativo e pertencer ao mesmo talhão em
-`dispositivos_iot`; a API rejeita o restante. Cadastre antes de publicar:
-
-```sql
-insert into dispositivos_iot (id, talhao, ativo)
-values ('SOLO-A2-01', 'A2', true)
-on conflict (id) do update set talhao = excluded.talhao, ativo = true;
-```
-
-Após publicar, confira `telemetrias` (histórico) e `sensores` (última leitura)
-no Supabase. Em produção, use TLS também entre ponte e API, limite o tamanho de
-mensagens no broker, monitore rejeições e rotacione as credenciais regularmente.
-
-## Iniciar
-
+### 3. Iniciar o Servidor
 No diretório do projeto, execute:
 
 ```powershell
-npm.cmd start
+npm start
 ```
 
-A API fica em `http://localhost:3000/api`. Copie `.env.example` para `.env` e
-preencha as cinco variáveis antes de iniciar. Execute todo o arquivo
-`supabase/schema.sql` no **SQL Editor** do seu projeto Supabase.
+O servidor iniciará em `http://localhost:3000` (com a API respondendo em `/api`).
 
-No desenvolvimento local, defina `FRONTEND_ORIGIN=http://localhost:5500`. Na
-Vercel, defina o domínio publicado do front, por exemplo
-`https://frutlog.vercel.app`. Adicione essas mesmas variáveis em **Settings → Environment
-Variables**. Nunca coloque `SUPABASE_SECRET_KEY`, `JWT_SECRET` ou
-`IOT_API_KEY` no front-end ou no GitHub.
+---
 
-## Enviar uma leitura de um dispositivo IoT
+## 🔐 Provisionar o primeiro administrador
 
-Cada dispositivo deve chamar `POST /api/iot/telemetria`, enviando a chave no
-cabeçalho `X-IoT-Key`. Em desenvolvimento, a chave padrão é
-`IOT_API_KEY`, definida somente no ambiente do servidor.
+O bootstrap inicial cria o Administrador Master com matrícula `admin`. Se `BOOTSTRAP_ADMIN_PASSWORD` estiver definida no `.env` local, o comando usa esse valor; caso contrário, gera uma senha aleatória de 10 caracteres. A senha é exibida apenas uma vez e deve possuir de 8 a 10 caracteres. Configure o `.env` e, após executar as migrações, rode:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/iot/telemetria `
-  -Headers @{ "X-IoT-Key" = "SUA_CHAVE_IOT" } `
-  -ContentType "application/json" `
-  -Body '{"sensorId":"SOLO-A2-01","talhao":"A2","tipo":"umidadeSolo","valor":32}'
+npm.cmd run bootstrap-admin
 ```
 
-Campos da telemetria: `sensorId`, `talhao`, `tipo`, `valor`; opcionais:
-`unidade` e `timestamp` (ISO 8601). Tipos aceitos no painel: `temperatura`,
-`umidadeSolo`, `umidadeAr` e `chuva`.
+Guarde a senha mostrada no terminal. Ela não pode ser recuperada pelo banco e deverá ser alterada no primeiro acesso. O comando falha de forma explícita se já houver qualquer usuário no banco. Para usar uma senha de bootstrap definida pela operação, informe-a em `BOOTSTRAP_ADMIN_PASSWORD` somente no `.env` local (não versionado); mantenha a senha fora dos arquivos do repositório.
 
-Para criar uma senha de usuário, execute `npm.cmd run password-hash --
-"SuaSenhaForte"` e grave o resultado na coluna `senha_hash` da tabela
-`usuarios`, junto com matrícula, nome e perfil.
+---
 
-Cada leitura e registro operacional é salvo no Supabase. A API usa CORS somente
-para `FRONTEND_ORIGIN`, JWT com expiração de 8 horas, senhas PBKDF2 e limite de
-120 requisições por minuto por IP. Cadastre o hash PBKDF2 de cada usuário na
-tabela `usuarios`; não salve senhas em texto puro.
-=======
-# FrutLog
+Se a matrícula `admin` já existir ou for necessário redefinir seu acesso, gere um hash com `npm.cmd run password-hash -- "senha-temporaria-de-8-a-10"`, substitua o marcador em [`supabase/013_reparar_admin.sql`](supabase/013_reparar_admin.sql) e execute o script no SQL Editor. O hash usa o mesmo PBKDF2 do backend; a senha será provisória e deverá ser alterada no primeiro login.
 
-Sistema web para gestao agricola, monitoramento de talhoes, acompanhamento de sensores, registro de inspecoes de campo e controle administrativo de funcionarios.
+## 📡 Ingestão de telemetria IoT
 
-O projeto foi desenvolvido como prototipo frontend para o Projeto Integrador. A interface ja esta preparada para integracao futura com backend e banco de dados.
+A ponte IoT envia ao endpoint `/api/iot/telemetria` leituras reais de sensores previamente cadastrados. O corpo JSON contém `sensorId`, `talhao`, `tipo`, `valor` numérico e `unidade`; a requisição também precisa enviar a chave privada do servidor no cabeçalho `X-IoT-Key`.
+---
 
-## Sobre o Projeto
+## 🌐 Catálogo de Rotas da API (`/api`)
 
-O FrutLog tem como objetivo auxiliar o acompanhamento da producao agricola por meio de paineis separados por perfil de usuario.
+A API suporta tanto **endpoints granulares REST** (para consultas específicas de componentes) quanto **endpoints compostos BFF** (para carregamento veloz em uma única requisição):
 
-Cada perfil possui uma visao especifica do sistema:
+### Autenticação, Saúde e IoT
+| Método | Rota | Descrição | Autenticação |
+|---|---|---|---|
+| `GET` | `/api/health` | Verifica status da API e conexão ao banco. | Pública |
+| `POST` | `/api/login` | Autentica matrícula/senha e emite token JWT. | Pública |
+| `POST` | `/api/iot/telemetria` | Ingestão de leitura enviada pela ponte privada MQTT. | Header `X-IoT-Key` |
+| `GET` | `/api/telemetria/thingspeak` | Proxy autenticado de leituras climáticas ThingSpeak; usa segredo somente no servidor. | Autenticado |
+| `GET` | `/api/telemetria/diaria` | Histórico diário agregado de leituras por talhão. | Autenticado |
 
-- **Engenheiro agronomo:** acompanha talhoes, telemetria, historico mensal, previsao de colheita e cadastro de plantio.
-- **Tecnico agricola:** registra inspecoes, ocorrencias, problemas em sensores e acompanha tarefas de campo.
-- **Administrador:** gerencia funcionarios, visualiza usuarios ativos, mapa da fazenda e graficos gerais.
+### Painéis Compostos (BFF)
+| Método | Rota | Descrição | Perfil Permitido |
+|---|---|---|---|
+| `GET` | `/api/painel-engenheiro` | Retorna talhões, sensores, inspeções e tarefas agregadas. | Engenheiro, Admin |
+| `GET` | `/api/painel-tecnico` | Retorna dados operacionais agregados para o técnico de campo. | Técnico, Admin |
 
-## Funcionalidades
-
-- Tela inicial com redirecionamento por sessao.
-- Login em modo demonstracao por perfil.
-- Dashboard para engenheiro agronomo.
-- Dashboard para tecnico agricola.
-- Dashboard administrativo.
-- Mapa visual dos talhoes com selecao interativa.
-- Exibicao de status dos talhoes: normal, atencao e critico.
-- Tabelas de telemetria, sensores, inspecoes e usuarios ativos.
-- Graficos com Chart.js.
-- Formularios de cadastro e registro preparados para envio ao backend.
-- Controle basico de sessao usando `sessionStorage`.
-- Teste smoke com Playwright para validar carregamento das paginas.
-
-## Status Atual
-
-O sistema esta em **modo demonstracao**.
-
-Nesta etapa, os dados ainda sao simulados no frontend. O banco de dados e o backend ainda nao estao conectados, mas o projeto ja possui estrutura preparada para API em `js/global.js`.
-
-Quando o backend estiver pronto, sera necessario ativar a autenticacao real e substituir os dados locais por chamadas HTTP.
-
-## Tecnologias Utilizadas
-
-- HTML5
-- CSS3
-- JavaScript
-- Chart.js
-- Font Awesome
-- Playwright
-- Live Server
-
-## Estrutura do Projeto
-
-```txt
-.
-├── admin.html
-├── eng.html
-├── index.html
-├── login.html
-├── tec.html
-├── css/
-│   ├── admin.css
-│   ├── dashboard.css
-│   ├── eng.css
-│   ├── global.css
-│   ├── index.css
-│   ├── login.css
-│   └── tec.css
-├── js/
-│   ├── admin.js
-│   ├── eng.js
-│   ├── global.js
-│   ├── index.js
-│   ├── login.js
-│   └── tec.js
-├── imagem/
-│   ├── fotinha.png
-│   └── mapa-FrutLog.jpg
-├── frutlog-smoke.spec.js
-└── RELATORIO_FRUTLOG.md
-```
-
-## Como Executar
-
-1. Clone o repositorio:
-
-```bash
-git clone <url-do-repositorio>
-```
-
-2. Acesse a pasta do projeto:
-
-```bash
-cd <nome-da-pasta>
-```
-
-3. Abra o projeto com o Live Server.
-
-4. Acesse a pagina inicial:
-
-```txt
-http://localhost:5501/index.html
-```
-
-Caso a porta do seu Live Server seja diferente, ajuste a URL conforme a porta exibida no VS Code.
-
-## Como Usar em Modo Demonstracao
-
-1. Abra `login.html`.
-2. Digite uma matricula qualquer.
-3. Digite uma senha com pelo menos 8 caracteres.
-4. Escolha o perfil de demonstracao:
-   - Engenheiro
-   - Tecnico
-   - Admin
-5. Clique em **Entrar**.
-
-O sistema redirecionara para o painel correspondente ao perfil escolhido.
-
-## Preparacao Para Backend
-
-O arquivo principal para integracao futura e:
-
-```txt
-js/global.js
-```
-
-Nele existem duas configuracoes importantes:
-
-```js
-const API_BASE_URL = "http://localhost:3000/api";
-const AUTENTICACAO_API_ATIVA = false;
-```
-
-Quando o backend estiver pronto, a autenticacao real podera ser ativada alterando:
-
-```js
-const AUTENTICACAO_API_ATIVA = true;
-```
-
-Rotas previstas para integracao:
-
-- `POST /api/login`
-- `GET /api/talhoes`
-- `POST /api/plantios`
-- `GET /api/inspecoes`
-- `POST /api/inspecoes`
-- `POST /api/ocorrencias`
-- `GET /api/sensores`
-- `POST /api/sensores/problemas`
-- `GET /api/funcionarios`
-- `POST /api/funcionarios`
-- `GET /api/sessoes`
-- `GET /api/dashboard/colheitas`
-- `GET /api/dashboard/clima`
-
-## Observacoes de Desenvolvimento
-
-- Os dados atuais sao demonstrativos.
-- A validacao de seguranca real deve ser feita no backend.
-- O frontend nao deve armazenar senhas.
-- O controle de perfil feito no navegador e apenas uma simulacao ate a API estar pronta.
-- O arquivo `RELATORIO_FRUTLOG.md` contem uma explicacao mais detalhada das classes, IDs, arquivos e pontos de manutencao.
-
-## Melhorias Futuras
-
-- Criar backend com autenticacao real.
-- Integrar banco de dados.
-- Centralizar dados simulados em um arquivo unico.
-- Criar camada propria de API em `js/api.js`.
-- Adicionar CRUD completo de funcionarios, talhoes, plantios e sensores.
-- Melhorar acessibilidade do mapa.
-- Adicionar mais testes automatizados.
-- Substituir dependencias via CDN por arquivos locais ou processo de build.
-- Implementar logs e auditoria para acoes administrativas.
-- Aplicar validacoes de seguranca no backend.
-
-## Autores
-
-Projeto desenvolvido para fins academicos no Projeto Integrador.
-
-Adicione aqui os nomes dos integrantes do grupo:
-
-- Nome 1
-- Nome 2
-- Nome 3
-- Nome 4
-
->>>>>>> 26e58ccf857d3371e4f1c9dac6e93159450c6275
+### Rotas REST Granulares
+| Método | Rota | Descrição | Perfil Permitido |
+|---|---|---|---|
+| `GET` | `/api/talhoes` | Lista todos os talhões cadastrados na fazenda. | Autenticado |
+| `GET` | `/api/sensores` | Lista sensores de campo com status e última leitura. | Autenticado |
+| `GET` / `POST` | `/api/inspecoes` | Consulta ou registra inspeção de rotina em talhão. | Técnico, Admin |
+| `GET` / `POST` | `/api/ocorrencias` | Consulta ou reporta anomalia operacional. | Técnico, Admin |
+| `GET` / `POST` | `/api/sensores/problemas` | Consulta ou registra chamado de manutenção em sensor. | Técnico, Admin |
+| `GET` / `POST` | `/api/plantios` | Consulta ciclos ou cadastra novo plantio agrícola. | Engenheiro, Admin |
+| `GET` | `/api/alertas` | Lista notificações ativas de limiares de sensores. | Autenticado |
+| `GET` / `POST` | `/api/funcionarios` | Consulta equipe ou cadastra novo funcionário com perfil. | Admin |

@@ -147,6 +147,77 @@
   font-weight: 600;
 }
 
+.thingspeak-dashboard {
+  min-width: 0;
+}
+
+.thingspeak-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.thingspeak-summary article {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: #fafbf8;
+}
+
+.thingspeak-summary span {
+  color: var(--cor-texto-suave);
+  font-size: 0.85rem;
+}
+
+.thingspeak-summary strong {
+  color: var(--cor-destaque);
+  font-size: 1.2rem;
+}
+
+.thingspeak-embeds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.thingspeak-embeds article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.thingspeak-embeds h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.thingspeak-embeds .container-iframe {
+  height: 260px;
+}
+
+.thingspeak-embeds iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.thingspeak-chart {
+  position: relative;
+  min-height: 280px;
+  margin: 12px 0;
+}
+
+.thingspeak-feed-scroll {
+  max-height: 360px;
+  overflow: auto;
+}
+
 .secao-mapa-detalhes {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
@@ -272,11 +343,12 @@
 }
 
 .ponto-arrastavel {
-  fill: #ffffff;
-  stroke: var(--cor-selecao);
-  stroke-width: 1.5;
+  fill: #2e7d32;
+  stroke: #ffffff;
+  stroke-width: 2;
   cursor: move;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .legenda-mapa {
@@ -402,6 +474,46 @@
   border-color: #e5d0e5;
 }
 
+.filtros-relatorios {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto minmax(150px, 220px) auto minmax(140px, 180px);
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.filtros-relatorios label {
+  font-weight: 600;
+}
+
+.conteudo-relatorio {
+  min-width: 240px;
+  max-width: 580px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.acoes-relatorio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 230px;
+}
+
+.acoes-relatorio select {
+  min-width: 130px;
+}
+
+.acoes-relatorio button {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .filtros-relatorios {
+    grid-template-columns: 1fr;
+  }
+}
+
 .destaque-fruta .valor {
   color: var(--cor-sidebar);
   font-size: 1.05rem;
@@ -447,6 +559,7 @@ textarea.campo-formulario {
 
 .area-botao-cadastro {
   display: flex;
+  gap: 10px;
   justify-content: flex-end;
   padding-top: 15px;
   margin-top: 20px;
@@ -470,6 +583,22 @@ textarea.campo-formulario {
 
 .btn-primario:hover {
   background-color: var(--cor-destaque-hover);
+}
+
+.btn-secundario {
+  min-height: 42px;
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  color: var(--cor-texto-escuro);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn-secundario:hover {
+  border-color: var(--cor-destaque);
+  color: var(--cor-destaque);
 }
 
 .tabela-responsiva {
@@ -577,10 +706,24 @@ textarea.campo-formulario {
 }
 
 @media (max-width: 1100px) {
-  .secao-mapa-detalhes,
+  .secao-mapa-detalhes {
+    grid-template-columns: 1fr;
+  }
+
   .grid-resumo-colheita,
   .grid-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 220px;
+  }
+
+  .conteudo-dashboard {
+    margin-left: 220px;
+    padding: 24px;
   }
 }
 
@@ -593,11 +736,42 @@ textarea.campo-formulario {
     position: static;
     width: 100%;
     height: auto;
+    padding: 14px 16px;
+  }
+
+  .logo-area {
+    margin-bottom: 12px;
+    padding-left: 0;
+  }
+
+  .menu {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  .sidebar-acoes {
+    margin-top: 10px;
+    padding-top: 0;
+  }
+
+  .sidebar-acoes .btn-logout,
+  .sidebar-acoes .btn-cadastrar-sidebar {
+    width: auto;
+    min-width: 120px;
   }
 
   .conteudo-dashboard {
     margin-left: 0;
-    padding: 20px;
+    padding: 20px 16px;
   }
 
   .info-grid-detalhes,
@@ -610,10 +784,46 @@ textarea.campo-formulario {
   }
 
   .area-botao-cadastro {
-    justify-content: stretch;
+    flex-direction: column;
   }
 
-  .btn-primario {
+  .area-botao-cadastro .btn-primario,
+  .area-botao-cadastro .btn-secundario {
     width: 100%;
+  }
+
+  .grid-resumo-colheita,
+  .grid-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .conteudo-dashboard {
+    padding: 16px 12px;
+  }
+
+  .cartao,
+  .cartao-full-diario {
+    padding: 14px;
+  }
+
+  .topo h1 {
+    font-size: 1.5rem;
+  }
+
+  .filtros-relatorios,
+  .filtros-admin {
+    gap: 8px;
+  }
+
+  .acoes-relatorio {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .acoes-relatorio select,
+  .acoes-relatorio button {
+    flex: 1 1 100%;
   }
 }

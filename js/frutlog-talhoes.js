@@ -1,6 +1,6 @@
 /* =========================================================
    FRUTLOG - DADOS DE TALHOES
-   Geometrias em estrutura GeoJSON preparada para API futura.
+   Geometrias GeoJSON sincronizadas com a API.
    ========================================================= */
 
 const FrutLogTalhoes = (() => {
@@ -13,30 +13,7 @@ const FrutLogTalhoes = (() => {
       {
         type: "Feature",
         id: "talhao-a1",
-        properties: {
-          codigo: "A1",
-          status: "Normal",
-          produto: "Uva",
-          variedade: "Uva Isabel",
-          area: "10 hectares",
-          solo: "Arenoso",
-          plantio: "15/03/2026",
-          colheita: "20/10/2026",
-          sensor: "TEMP-A1-01",
-          parametros: { temperaturaMaxima: 32 },
-          apontamentoTecnico: {
-            data: "13/09/2026",
-            tecnico: "Marina",
-            problema: "Sem problema registrado.",
-            recomendacao: "Manter rotina de acompanhamento.",
-          },
-          diaria: { temperatura: "31", umidadeAr: "68", umidadeSolo: "45", chuva: "2,4" },
-          mensal: [
-            { temp: "30", umidAr: "65", umidSolo: "45", chuva: "12", prev: "Out/2026", qtd: "25 t" },
-            { temp: "31", umidAr: "68", umidSolo: "42", chuva: "8", prev: "Out/2026", qtd: "28 t" },
-          ],
-          prioridade: "Rotina de acompanhamento",
-        },
+        properties: { codigo: "A1" },
         geometry: {
           type: "Polygon",
           coordinates: [[[180, 135], [278, 14], [298, 18], [340, 55], [285, 120], [260, 140], [202, 141], [180, 135]]],
@@ -45,30 +22,7 @@ const FrutLogTalhoes = (() => {
       {
         type: "Feature",
         id: "talhao-a2",
-        properties: {
-          codigo: "A2",
-          status: "Atencao",
-          produto: "Manga",
-          variedade: "Tommy Atkins",
-          area: "8 hectares",
-          solo: "Franco Arenoso",
-          plantio: "10/02/2026",
-          colheita: "18/09/2026",
-          sensor: "SOLO-A2-01",
-          parametros: { temperaturaMaxima: 32 },
-          apontamentoTecnico: {
-            data: "13/09/2026",
-            tecnico: "Marina",
-            problema: "Umidade do solo abaixo do ideal.",
-            recomendacao: "Verificar irrigacao e acompanhar nas proximas leituras.",
-          },
-          diaria: { temperatura: "33", umidadeAr: "61", umidadeSolo: "35", chuva: "1,8" },
-          mensal: [
-            { temp: "32", umidAr: "60", umidSolo: "38", chuva: "5", prev: "Set/2026", qtd: "40 t" },
-            { temp: "33", umidAr: "61", umidSolo: "35", chuva: "2", prev: "Set/2026", qtd: "42 t" },
-          ],
-          prioridade: "Verificar umidade do solo",
-        },
+        properties: { codigo: "A2" },
         geometry: {
           type: "Polygon",
           coordinates: [[[116, 120], [136, 127], [172, 127], [195, 142], [240, 147], [235, 215], [185, 215], [145, 205], [115, 190], [116, 120]]],
@@ -77,30 +31,7 @@ const FrutLogTalhoes = (() => {
       {
         type: "Feature",
         id: "talhao-b1",
-        properties: {
-          codigo: "B1",
-          status: "Normal",
-          produto: "Uva",
-          variedade: "Sugar Crisp",
-          area: "9 hectares",
-          solo: "Arenoso",
-          plantio: "05/02/2026",
-          colheita: "25/09/2026",
-          sensor: "CHUVA-B1-01",
-          parametros: { temperaturaMaxima: 31 },
-          apontamentoTecnico: {
-            data: "13/09/2026",
-            tecnico: "Marina",
-            problema: "Sem problema registrado.",
-            recomendacao: "Manter rotina de acompanhamento.",
-          },
-          diaria: { temperatura: "30", umidadeAr: "72", umidadeSolo: "48", chuva: "3,1" },
-          mensal: [
-            { temp: "29", umidAr: "70", umidSolo: "50", chuva: "15", prev: "Set/2026", qtd: "30 t" },
-            { temp: "30", umidAr: "72", umidSolo: "48", chuva: "10", prev: "Set/2026", qtd: "35 t" },
-          ],
-          prioridade: "Rotina de acompanhamento",
-        },
+        properties: { codigo: "B1" },
         geometry: {
           type: "Polygon",
           coordinates: [[[285, 120], [305, 85], [340, 95], [380, 140], [350, 170], [320, 205], [285, 235], [250, 220], [235, 185], [250, 150], [270, 135], [285, 120]]],
@@ -109,30 +40,7 @@ const FrutLogTalhoes = (() => {
       {
         type: "Feature",
         id: "talhao-b2",
-        properties: {
-          codigo: "B2",
-          status: "Critico",
-          produto: "Melao",
-          variedade: "Goldex",
-          area: "7,6 hectares",
-          solo: "Franco Arenoso",
-          plantio: "20/01/2026",
-          colheita: "15/09/2026",
-          sensor: "SOLO-B2-01",
-          parametros: { temperaturaMaxima: 34 },
-          apontamentoTecnico: {
-            data: "12/09/2026",
-            tecnico: "Marina",
-            problema: "Sensor de solo offline e leitura critica de umidade.",
-            recomendacao: "Priorizar vistoria em campo e checar irrigacao.",
-          },
-          diaria: { temperatura: "35", umidadeAr: "54", umidadeSolo: "28", chuva: "0,8" },
-          mensal: [
-            { temp: "34", umidAr: "55", umidSolo: "30", chuva: "0", prev: "Set/2026", qtd: "18 t" },
-            { temp: "35", umidAr: "54", umidSolo: "28", chuva: "1", prev: "Set/2026", qtd: "20 t" },
-          ],
-          prioridade: "Checar sensor e irrigacao",
-        },
+        properties: { codigo: "B2" },
         geometry: {
           type: "Polygon",
           coordinates: [[[75, 85], [115, 120], [187, 107], [230, 105], [220, 85], [280, 5], [230, 5], [75, 85]]],
@@ -172,8 +80,8 @@ const FrutLogTalhoes = (() => {
 
     if (temperaturaAtual === null || temperaturaMaxima === null) {
       return {
-        status: "Normal",
-        prioridade: "Sem leitura suficiente para alerta automatico.",
+        status: feature?.properties?.status || "Sem leitura",
+        prioridade: feature?.properties?.prioridade || "Sem leitura suficiente para alerta automatico.",
         leituraTemperatura: temperaturaAtual,
         limiteTemperatura: temperaturaMaxima,
       };
@@ -198,7 +106,7 @@ const FrutLogTalhoes = (() => {
     }
 
     return {
-      status: "Normal",
+      status: "Sem leitura",
       prioridade: `Temperatura ${temperaturaAtual} C dentro do limite de ${temperaturaMaxima} C.`,
       leituraTemperatura: temperaturaAtual,
       limiteTemperatura: temperaturaMaxima,
@@ -211,7 +119,7 @@ const FrutLogTalhoes = (() => {
 
     clone.properties.status = resultado.status;
     clone.properties.monitoramento = {
-      origem: "ThingSpeak",
+      origem: "Banco de dados",
       temperaturaAtual: resultado.leituraTemperatura,
       temperaturaMaxima: resultado.limiteTemperatura,
       status: resultado.status,
@@ -254,9 +162,54 @@ const FrutLogTalhoes = (() => {
     const colecaoMonitorada = aplicarMonitoramentoColecao(colecao);
 
     gravarRascunhoSalvo(colecaoMonitorada);
-    // TODO: substituir por FrutLog.apiFetch("/talhoes/geometrias", ...) quando houver endpoint.
-    console.info("GeoJSON dos talhoes preparado para persistencia:", colecaoMonitorada);
     return clonar(colecaoMonitorada);
+  }
+
+  function carregarDoServidor(registros) {
+    if (!Array.isArray(registros)) {
+      throw new Error("Resposta invalida ao carregar talhoes do servidor.");
+    }
+
+    const locais = obterTalhoes();
+    const porCodigo = new Map(locais.map((feature) => [feature.properties.codigo, feature]));
+    const iniciaisPorCodigo = new Map(dadosIniciais.features.map((feature) => [feature.properties.codigo, feature]));
+    const features = registros.map((registro) => {
+      const codigo = registro.codigo;
+      const local = porCodigo.get(codigo);
+      const inicial = iniciaisPorCodigo.get(codigo);
+      const coordenadas = Array.isArray(registro.coordenadas)
+        ? registro.coordenadas
+        : registro.coordenadas?.coordinates?.[0];
+      const coordenadasValidas = Array.isArray(coordenadas)
+        && coordenadas.length >= 4
+        && coordenadas.every((ponto) => Array.isArray(ponto)
+          && ponto.length === 2
+          && ponto.every((valor) => Number.isFinite(Number(valor))));
+      const geometriaLocal = local?.geometry?.coordinates?.[0]?.length >= 4
+        ? local.geometry
+        : inicial?.geometry;
+      const geometria = coordenadasValidas
+        ? { type: "Polygon", coordinates: [coordenadas] }
+        : geometriaLocal || { type: "Polygon", coordinates: [[]] };
+
+      const area = Number(registro.area_hectares);
+      const geometriaPendente = geometria.coordinates?.[0]?.length < 4;
+      return {
+        type: "Feature",
+        id: registro.id || local?.id || `talhao-${String(codigo).toLowerCase()}`,
+        properties: {
+          ...(local?.properties || {}),
+          codigo,
+          nome: registro.nome || local?.properties?.nome || codigo,
+          area_hectares: Number.isFinite(area) ? area : null,
+          area: Number.isFinite(area) ? `${area} hectares` : local?.properties?.area || "--",
+          geometriaPendente,
+        },
+        geometry: geometria,
+      };
+    });
+
+    return substituirTalhoes(features);
   }
 
   function obterTalhoes() {
@@ -297,14 +250,14 @@ const FrutLogTalhoes = (() => {
         plantio: "--",
         colheita: "--",
         sensor: "Nao associado",
-        parametros: { temperaturaMaxima: 30 },
+        parametros: { temperaturaMaxima: null },
         apontamentoTecnico: {
           data: "--",
           tecnico: "--",
-          problema: "Sem problema registrado.",
-          recomendacao: "Cadastrar cultivo e associar sensor.",
+          problema: "--",
+          recomendacao: "--",
         },
-        diaria: { temperatura: "0", umidadeAr: "--", umidadeSolo: "--", chuva: "--" },
+        diaria: { temperatura: null, umidadeAr: null, umidadeSolo: null, chuva: null },
         mensal: [],
         prioridade: "Aguardando vistoria",
         ...propriedades,
@@ -327,7 +280,8 @@ const FrutLogTalhoes = (() => {
   }
 
   function obterPontos(feature) {
-    return (feature.geometry.coordinates[0] || []).slice(0, -1);
+    const pontos = feature.geometry?.coordinates?.[0];
+    return Array.isArray(pontos) && pontos.length > 1 ? pontos.slice(0, -1) : [];
   }
 
   return {
@@ -336,6 +290,7 @@ const FrutLogTalhoes = (() => {
     atualizarTelemetriaTalhao,
     calcularStatusMonitoramento,
     fecharAnel,
+    carregarDoServidor,
     obterColecao,
     obterPontos,
     obterTalhoes,

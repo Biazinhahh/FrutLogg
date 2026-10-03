@@ -7,16 +7,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   const campoMatricula = document.getElementById("matricula");
   const campoSenha = document.getElementById("senha");
-  const campoPerfilDemo = document.getElementById("perfil-demo");
-  const areaPerfilDemo = document.getElementById("campo-perfil-demo");
   const botaoMostrarSenha = document.getElementById("togglePassword");
   const formularioLogin = document.getElementById("formularioLogin");
   const botaoLogin = document.querySelector(".btn-login");
   const mensagemLogin = document.getElementById("mensagem-login");
-
-  if (areaPerfilDemo && FrutLog.AUTENTICACAO_API_ATIVA) {
-    areaPerfilDemo.hidden = true;
-  }
 
   function exibirMensagem(texto, tipo = "") {
     if (!mensagemLogin) {
@@ -41,14 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function realizarLogin(matricula, senha) {
-    if (!FrutLog.AUTENTICACAO_API_ATIVA) {
-      const perfil = campoPerfilDemo?.value || "engenheiro";
-
-      FrutLog.criarSessaoDemonstracao(perfil, matricula);
-      FrutLog.redirecionarPorPerfil(perfil);
-      return;
-    }
-
     try {
       const dados = await FrutLog.apiFetch("/login", {
         method: "POST",
@@ -70,7 +56,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       FrutLog.salvarSessao(dados.usuario, dados.token);
-      FrutLog.redirecionarPorPerfil(dados.usuario.perfil);
+      if (dados.usuario.mustChangePassword) {
+        window.location.replace("senha-temporaria.html");
+      } else {
+        FrutLog.redirecionarPorPerfil(dados.usuario.perfil);
+      }
     } catch (erro) {
       campoSenha.value = "";
       exibirMensagem(erro.message, "erro");
@@ -81,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
     botaoMostrarSenha.addEventListener("click", alternarVisibilidadeSenha);
   }
 
-  if (formularioLogin) {
+if (formularioLogin) {
     formularioLogin.addEventListener("submit", async (evento) => {
       evento.preventDefault();
 
@@ -100,8 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (senha.length < 8) {
-        exibirMensagem("A senha deve possuir no minimo 8 caracteres.", "erro");
+      if (senha.length < 8 || senha.length > 10) {
+        exibirMensagem("A senha deve possuir entre 8 e 10 caracteres.", "erro");
         campoSenha.focus();
         return;
       }
@@ -116,10 +106,6 @@ document.addEventListener("DOMContentLoaded", () => {
       botaoLogin.textContent = "Entrar";
     });
   }
-}); 
-
-
-
-
+});
 
 

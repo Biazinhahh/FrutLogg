@@ -4,23 +4,37 @@
    ========================================================= */
 
 const FrutLog = (() => {
-  const API_BASE_URL = "http://localhost:3000/api";
+  const API_BASE_URL = `${window.location.origin}/api`;
   const CHAVE_SESSAO = "frutlog_sessao";
   const CHAVE_TOKEN = "frutlog_token";
+  const CANAL_ATUALIZACOES_TALHOES = "frutlog:atualizacoes-talhoes";
+  const canalAtualizacoesTalhoes = "BroadcastChannel" in window
+    ? new BroadcastChannel(CANAL_ATUALIZACOES_TALHOES)
+    : null;
 
-  // Altere para true quando o backend de autenticacao estiver disponivel.
-  const AUTENTICACAO_API_ATIVA = false;
+  const AUTENTICACAO_API_ATIVA = true;
+  const emitirAtualizacaoTalhoes = () => {
+    window.dispatchEvent(new CustomEvent("frutlog:talhoes-atualizados"));
+  };
+  if (canalAtualizacoesTalhoes) {
+    canalAtualizacoesTalhoes.addEventListener("message", emitirAtualizacaoTalhoes);
+  } else {
+    window.addEventListener("storage", (evento) => {
+      if (evento.key === CANAL_ATUALIZACOES_TALHOES) emitirAtualizacaoTalhoes();
+    });
+  }
+  [
+    "frutlog_admin_funcionarios_demo",
+    "frutlog_admin_sensores_demo",
+  ].forEach((chave) => {
+    localStorage.removeItem(chave);
+    sessionStorage.removeItem(chave);
+  });
 
   const rotasPorPerfil = {
     engenheiro: "eng.html",
     tecnico: "tec.html",
     admin: "admin.html",
-  };
-
-  const nomesPorPerfil = {
-    engenheiro: "Engenheiro de Demonstracao",
-    tecnico: "Tecnico de Demonstracao",
-    admin: "Administrador de Demonstracao",
   };
 
   function obterSessao() {
@@ -31,7 +45,12 @@ const FrutLog = (() => {
     }
 
     try {
-      return JSON.parse(sessaoSalva);
+      const sessao = JSON.parse(sessaoSalva);
+      if (sessao.mustChangePassword && !window.location.pathname.endsWith("/senha-temporaria.html")) {
+        window.location.replace("senha-temporaria.html");
+        return null;
+      }
+      return sessao;
     } catch (erro) {
       console.error("Sessao invalida no navegador:", erro);
       sessionStorage.removeItem(CHAVE_SESSAO);
@@ -46,6 +65,7 @@ const FrutLog = (() => {
       matricula: usuario.matricula,
       nome: usuario.nome,
       perfil: usuario.perfil,
+      mustChangePassword: Boolean(usuario.mustChangePassword),
     };
 
     sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
@@ -59,17 +79,6 @@ const FrutLog = (() => {
     return sessao;
   }
 
-  function criarSessaoDemonstracao(perfil = "engenheiro", matricula = "demo") {
-    const perfilNormalizado = rotasPorPerfil[perfil] ? perfil : "engenheiro";
-
-    return salvarSessao({
-      id: 0,
-      matricula,
-      nome: nomesPorPerfil[perfilNormalizado],
-      perfil: perfilNormalizado,
-    });
-  }
-
   function encerrarSessao() {
     sessionStorage.removeItem(CHAVE_SESSAO);
     sessionStorage.removeItem(CHAVE_TOKEN);
@@ -77,11 +86,7 @@ const FrutLog = (() => {
   }
 
   function verificarSessao(perfisPermitidos = []) {
-    let sessao = obterSessao();
-
-    if (!sessao && !AUTENTICACAO_API_ATIVA) {
-      sessao = criarSessaoDemonstracao(perfisPermitidos[0] || "engenheiro");
-    }
+    const sessao = obterSessao();
 
     if (!sessao) {
       window.location.replace("login.html");
@@ -124,16 +129,20 @@ const FrutLog = (() => {
     }
 
     let dados = null;
-
-    try {
-      dados = await resposta.json();
-    } catch (erro) {
-      if (resposta.status !== 204) {
-        throw new Error("Resposta JSON invalida recebida do servidor.");
+    if (resposta.status !== 204) {
+      const corpo = await resposta.text();
+      try {
+        dados = corpo ? JSON.parse(corpo) : null;
+      } catch {
+        const tipo = resposta.headers.get("content-type") || "desconhecido";
+        throw new Error(
+          `A API respondeu sem JSON (HTTP ${resposta.status}; ${tipo}). ` +
+          "Abra o sistema pela URL do servidor FrutLog, nao pelo Live Server."
+        );
       }
     }
 
-    if (resposta.status === 401) {
+    if (resposta.status === 401 && caminho !== "/login") {
       encerrarSessao();
       throw new Error("Sessao expirada. Faca login novamente.");
     }
@@ -153,16 +162,59 @@ const FrutLog = (() => {
     }
   }
 
+  function configurarAbasSidebar() {
+    const links = [...document.querySelectorAll(".menu .nav-link")];
+    const paineis = links
+      .map((link) => document.getElementById(link.hash.slice(1)))
+      .filter(Boolean);
+    if (!links.length || !paineis.length) return;
+
+    function ativar(painelAtivo, atualizarHash = false) {
+      paineis.forEach((painel) => {
+        painel.hidden = painel !== painelAtivo;
+      });
+      links.forEach((link) => {
+        const ativo = document.getElementById(link.hash.slice(1)) === painelAtivo;
+        link.classList.toggle("active", ativo);
+        if (ativo) link.setAttribute("aria-current", "page");
+        else link.removeAttribute("aria-current");
+      });
+      if (atualizarHash) history.replaceState(null, "", `#${painelAtivo.id}`);
+      window.dispatchEvent(new Event("resize"));
+    }
+
+    links.forEach((link) => {
+      link.addEventListener("click", (evento) => {
+        const painel = document.getElementById(link.hash.slice(1));
+        if (!painel || !paineis.includes(painel)) return;
+        evento.preventDefault();
+        ativar(painel, true);
+      });
+    });
+
+    const painelInicial = paineis.find((painel) => painel.id === window.location.hash.slice(1)) || paineis[0];
+    ativar(painelInicial);
+  }
+
+  function notificarAtualizacaoTalhoes() {
+    if (canalAtualizacoesTalhoes) {
+      canalAtualizacoesTalhoes.postMessage({ atualizadoEm: Date.now() });
+    } else {
+      localStorage.setItem(CANAL_ATUALIZACOES_TALHOES, String(Date.now()));
+    }
+  }
+
   return {
     API_BASE_URL,
     AUTENTICACAO_API_ATIVA,
     obterSessao,
     salvarSessao,
-    criarSessaoDemonstracao,
     verificarSessao,
     redirecionarPorPerfil,
     apiFetch,
     configurarLogout,
+    configurarAbasSidebar,
     encerrarSessao,
+    notificarAtualizacaoTalhoes,
   };
 })();
