@@ -9,11 +9,11 @@ Este diretório contém o esquema de dados oficial e consolidado do **FrutLog**,
 1. Acesse o painel do seu projeto no [Supabase](https://supabase.com).
 2. No menu lateral, clique em **SQL Editor**.
 3. Crie uma nova consulta clicando em **+ New query**.
-4. Execute `schema.sql` para criar a estrutura vazia.
-5. Execute `006_particionamento_dinamico_telemetria.sql`, `007_admin_and_map_sync.sql`, `008_relatorios_diarios.sql`, `009_bootstrap_super_admin.sql`, `010_alertas_de_campo.sql`, `011_profissao_usuario.sql`, `012_bootstrap_admin_login.sql`, `015_reparar_esquema_operacional.sql`, `016_reparar_painel_engenheiro.sql` e `017_corrigir_codigo_ambiguo_talhoes.sql`, nessa ordem.
+4. Para uma instalacao nova, execute `schema_oficial_atualizado.sql`. Este arquivo e a referencia consolidada e inclui o modelo operacional e as rotinas de API atualmente necessarias.
+5. Para uma instalacao existente, preserve os dados e aplique somente as migracoes pendentes na ordem `006` a `012`, depois `014` a `022` (`013` e uma rotina de recuperacao de senha do Admin). Nao reexecute o esquema-base sobre um banco em operacao.
 6. Configure `SUPABASE_URL` e a chave `service_role` apenas no `.env` local e execute `npm run bootstrap-admin` para criar o primeiro administrador.
 
-O esquema não inclui usuários, talhões, sensores, credenciais ou leituras de exemplo.
+O esquema nao inclui usuarios, talhoes, sensores, credenciais ou leituras de exemplo. `schema.sql` e mantido como esquema-base historico; os arquivos de migracao numerados tambem permanecem inalterados.
 O bootstrap só funciona enquanto não houver nenhum usuário e exige alteração da senha provisória no primeiro acesso.
 
 Se o cadastro de funcionários retornar que `public.proxima_matricula_funcionario` não foi encontrada no cache do schema, execute `007_admin_and_map_sync.sql` no SQL Editor do Supabase. Essa migração cria a sequência e a função RPC de matrícula e solicita a atualização do cache do PostgREST; em seguida, tente o cadastro novamente.
@@ -23,6 +23,12 @@ Para reparar instalações existentes com colunas ou tabelas operacionais ausent
 Se o painel do engenheiro reportar que `ciclo_cultura.previsao_colheita` ou `relatorio_campo_diario` não existem, execute `016_reparar_painel_engenheiro.sql`. A migração é segura para reexecução e solicita a atualização do cache do PostgREST.
 
 Se o salvamento dos limites dos talhões falhar com `column reference "codigo" is ambiguous`, execute `017_corrigir_codigo_ambiguo_talhoes.sql` no SQL Editor. Ela substitui a função RPC de salvamento sem alterar dados existentes; depois, tente salvar novamente.
+
+Para instalações existentes, execute também as migrações `018`, `019`, `020`, `021` e `022` acima. A 020 remove a obrigatoriedade do vínculo de ciclo tanto no nome atual (`ciclo_cultura_id`) quanto no nome legado (`crop_cycle_id`), quando essas colunas existirem. Isso permite registrar uma colheita em talhão sem plantio ativo. A 022 permite registrar problema de sensor sem sensor previamente cadastrado.
+
+Se a colheita falhar informando que `registrado_por` é obrigatório, execute `021_registrar_autor_colheita.sql`. A API atual envia o identificador do usuário autenticado nesse campo. A rota de talhões também está limitada à fazenda usada pelo salvamento de geometrias; reinicie a API para aplicar a correção e recarregue os painéis.
+
+Antes de limpar culturas/cultivares antigas, execute `diagnostico_instalacao.sql` no SQL Editor. Ele é somente de leitura e mostra as colunas ausentes, restrições, RPCs, geometrias e o inventário de culturas/plantios. A migração `005_migrar_dados_legados.sql` importa registros já existentes das tabelas antigas `talhoes` e `dispositivos_iot` (inclusive nomes, áreas, culturas/variedades e dispositivos ativos), cria ciclos para esses plantios e pode explicar dados exibidos sem novo cadastro no painel atual. Ela não é necessária para uma instalação vazia; não a execute nesse caso nem apague dados migrados antes de conferir o inventário.
 
 ### Recuperar ou redefinir o acesso de administrador
 

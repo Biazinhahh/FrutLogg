@@ -136,6 +136,18 @@ async function db(c, table, method = "GET", data, query = "") {
   return response.status === 204 ? [] : response.json();
 }
 
+async function farmsForOrganization(c) {
+  const organization = (await db(c, "organizacao", "GET", undefined, "?select=id&order=criado_em&limit=1"))[0];
+  if (!organization) return [];
+  return db(
+    c,
+    "fazenda",
+    "GET",
+    undefined,
+    `?organizacao_id=eq.${encodeURIComponent(organization.id)}&select=id&order=criado_em`
+  );
+}
+
 const hits = new Map();
 function rateLimit(req, maximum, scope) {
   const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "?").split(",")[0].trim();
@@ -233,7 +245,7 @@ module.exports = async (req, res) => {
             sucesso: false,
             banco: true,
             esquema: false,
-            mensagem: "Banco conectado, mas public.usuario nao esta disponivel na API do Supabase. Execute supabase/schema.sql e depois recarregue o cache PostgREST."
+            mensagem: "Banco conectado, mas public.usuario nao esta disponivel na API do Supabase. Confira supabase/schema_oficial_atualizado.sql e recarregue o cache PostgREST."
           },
           origin
         );
@@ -321,6 +333,97 @@ module.exports = async (req, res) => {
     // Validação de Sessão para Rotas Protegidas
     const user = authenticated(req, c.jwt);
     if (!user) return reply(res, 401, { mensagem: "Nao autorizado." }, origin);
+
+    if (req.method === "GET" && route === "/chatbot/contexto") {
+      const farms = await farmsForOrganization(c);
+      if (!farms.length) {
+        return reply(res, 200, { consultado_em: new Date().toISOString(), ocorrencias: [], sensores: [] }, origin);
+      }
+      const plots = await db(
+        c,
+        "talhao",
+        "GET",
+        undefined,
+        `?fazenda_id=in.(${farms.map((farm) => farm.id).join(",")})&select=id,codigo`
+      );
+      if (!plots.length) {
+        return reply(res, 200, { consultado_em: new Date().toISOString(), ocorrencias: [], sensores: [] }, origin);
+      }
+      const plotIds = plots.map((plot) => plot.id);
+      const [occurrences, devices] = await Promise.all([
+        db(
+          c,
+          "ocorrencia",
+          "GET",
+          undefined,
+          `?talhao_id=in.(${plotIds.join(",")})&select=talhao_id,tipo,observacao,registrado_em&order=registrado_em.desc&limit=10`
+        ),
+        db(
+          c,
+          "dispositivo",
+          "GET",
+          undefined,
+          `?talhao_id=in.(${plotIds.join(",")})&select=id,id_externo,talhao_id,status,ultimo_sinal_em`
+        ),
+      ]);
+      const deviceIds = devices.map((device) => device.id);
+      const sensors = deviceIds.length
+        ? await db(
+          c,
+          "sensor",
+          "GET",
+          undefined,
+          `?dispositivo_id=in.(${deviceIds.join(",")})&select=id,id_externo,dispositivo_id,codigo_metrica,unidade,status`
+        )
+        : [];
+      const sensorIds = sensors.map((sensor) => sensor.id);
+      const readings = sensorIds.length
+        ? await db(
+          c,
+          "v_ultima_leitura_sensor",
+          "GET",
+          undefined,
+          `?sensor_id=in.(${sensorIds.join(",")})&select=sensor_id,valor,unidade,coletado_em`
+        )
+        : [];
+      const plotById = new Map(plots.map((plot) => [plot.id, plot.codigo]));
+      const deviceById = new Map(devices.map((device) => [device.id, device]));
+      const readingBySensor = new Map(readings.map((reading) => [reading.sensor_id, reading]));
+      const recentOccurrences = occurrences.map((occurrence) => ({
+        talhao: plotById.get(occurrence.talhao_id) || null,
+        tipo: occurrence.tipo,
+        observacao: occurrence.observacao,
+        data: occurrence.registrado_em,
+      }));
+      const sensorStatuses = sensors.map((sensor) => {
+        const device = deviceById.get(sensor.dispositivo_id);
+        const reading = readingBySensor.get(sensor.id);
+        const status = sensor.status !== "ativo"
+          ? "Inativo"
+          : device?.status === "online"
+            ? "Online"
+            : device?.status === "manutencao"
+              ? "Manutencao"
+              : device?.status === "desativado"
+                ? "Desativado"
+                : "Offline";
+        return {
+          sensor: sensor.id_externo,
+          talhao: device ? plotById.get(device.talhao_id) || null : null,
+          metrica: sensor.codigo_metrica,
+          unidade: sensor.unidade,
+          status,
+          leitura: reading ? `${reading.valor} ${reading.unidade || sensor.unidade}` : "Sem leitura",
+          coletado_em: reading?.coletado_em || device?.ultimo_sinal_em || null,
+        };
+      });
+
+      return reply(res, 200, {
+        consultado_em: new Date().toISOString(),
+        ocorrencias: recentOccurrences,
+        sensores: sensorStatuses,
+      }, origin);
+    }
 
     if (route === "/alterar-senha" && req.method === "POST") {
       const d = await parseBody(req);
@@ -527,13 +630,24 @@ module.exports = async (req, res) => {
       if (!plot) return reply(res, 404, { mensagem: "Talhao nao encontrado." }, origin);
 
       const created = await db(c, "colheita", "POST", {
+        ciclo_cultura_id: (await db(
+          c,
+          "ciclo_cultura",
+          "GET",
+          undefined,
+          `?talhao_id=eq.${encodeURIComponent(plot.id)}&status=eq.ativo&select=id&order=plantado_em.desc&limit=1`
+        ))[0]?.id || null,
         talhao_id: plot.id,
         colhido_em: colhidoEm,
         quantidade,
         unidade: d.unidade,
-        ano: Number(colhidoEm.slice(0, 4))
+        ano: Number(colhidoEm.slice(0, 4)),
+        registrado_por: user.sub
       });
       const harvest = Array.isArray(created) ? created[0] : created;
+      if (!harvest?.id) {
+        throw new Error("O banco nao confirmou a gravacao da colheita. Atualize o esquema e tente novamente.");
+      }
       return reply(res, 201, { sucesso: true, colheita: harvest }, origin);
     }
 
@@ -609,7 +723,15 @@ module.exports = async (req, res) => {
 
     // 4. Rotas Granulares: Talhões
     if (req.method === "GET" && route === "/talhoes") {
-      const plots = await db(c, "talhao", "GET", undefined, "?select=id,codigo,nome,area_hectares,coordenadas&order=codigo");
+      const farms = await farmsForOrganization(c);
+      if (!farms.length) return reply(res, 503, { mensagem: "Fazenda nao configurada." }, origin);
+      const plots = await db(
+        c,
+        "talhao",
+        "GET",
+        undefined,
+        `?fazenda_id=in.(${farms.map((farm) => farm.id).join(",")})&select=id,codigo,nome,area_hectares,coordenadas&order=codigo`
+      );
       return reply(res, 200, { talhoes: plots }, origin);
     }
 
@@ -662,16 +784,33 @@ module.exports = async (req, res) => {
         return reply(res, 400, { mensagem: "Lista de talhoes removidos invalida." }, origin);
       }
 
-      const organization = (await db(c, "organizacao", "GET", undefined, "?select=id&order=criado_em&limit=1"))[0];
-      if (!organization) return reply(res, 503, { mensagem: "Organizacao nao configurada." }, origin);
-      const farm = (await db(
-        c,
-        "fazenda",
-        "GET",
-        undefined,
-        `?organizacao_id=eq.${encodeURIComponent(organization.id)}&select=id&order=criado_em&limit=1`
-      ))[0];
-      if (!farm) return reply(res, 503, { mensagem: "Fazenda nao configurada." }, origin);
+      const farms = await farmsForOrganization(c);
+      if (!farms.length) return reply(res, 503, { mensagem: "Fazenda nao configurada." }, origin);
+
+      const candidateCodes = [...new Set([
+        ...d.talhoes.map((feature) => feature.properties.codigo),
+        ...removidos
+      ])];
+      const existingPlots = candidateCodes.length
+        ? await db(
+          c,
+          "talhao",
+          "GET",
+          undefined,
+          `?fazenda_id=in.(${farms.map((farm) => farm.id).join(",")})&codigo=in.(${candidateCodes.map(encodeURIComponent).join(",")})&select=id,codigo,fazenda_id`
+        )
+        : [];
+      const farmIds = new Set(existingPlots.map((plot) => plot.fazenda_id));
+      if (farmIds.size > 1) {
+        return reply(
+          res,
+          409,
+          { mensagem: "Os talhoes enviados pertencem a mais de uma fazenda. Edite e salve uma fazenda por vez." },
+          origin
+        );
+      }
+      const farmId = farmIds.values().next().value || farms[0].id;
+      const farm = farms.find((item) => item.id === farmId);
 
       const result = await db(c, "rpc/salvar_geometrias_talhoes", "POST", {
         p_fazenda_id: farm.id,
@@ -679,7 +818,28 @@ module.exports = async (req, res) => {
         p_removidos: removidos
       });
       if (result?.erro) return reply(res, 409, { mensagem: result.erro }, origin);
-      return reply(res, 200, { sucesso: true, talhoes: result }, origin);
+      const persistedPlots = await db(
+        c,
+        "talhao",
+        "GET",
+        undefined,
+        `?fazenda_id=eq.${encodeURIComponent(farm.id)}&select=id,codigo,nome,area_hectares,coordenadas&order=codigo`
+      );
+      const persistedByCode = new Map(persistedPlots.map((plot) => [plot.codigo, plot]));
+      const geometryConfirmed = d.talhoes.every((feature) => {
+        const saved = persistedByCode.get(feature.properties.codigo);
+        return saved && JSON.stringify(saved.coordenadas) === JSON.stringify(feature.geometry.coordinates[0]);
+      });
+      const removalsConfirmed = removidos.every((codigo) => !persistedByCode.has(codigo));
+      if (!geometryConfirmed || !removalsConfirmed) {
+        return reply(
+          res,
+          502,
+          { mensagem: "O banco nao confirmou todas as geometrias. As alteracoes nao foram consideradas salvas; atualize os dados e tente novamente." },
+          origin
+        );
+      }
+      return reply(res, 200, { sucesso: true, talhoes: persistedPlots }, origin);
     }
 
     // 5. Rotas Granulares: Sensores e Última Leitura
@@ -703,7 +863,15 @@ module.exports = async (req, res) => {
           talhao: d ? plotMap.get(d.talhao_id) : null,
           tipo: s.codigo_metrica,
           unidade: s.unidade,
-          status: s.status !== "ativo" ? "Inativo" : d?.status === "offline" ? "Offline" : "Online",
+          status: s.status !== "ativo"
+            ? "Inativo"
+            : d?.status === "offline"
+              ? "Offline"
+              : d?.status === "manutencao"
+                ? "Manutencao"
+                : d?.status === "desativado" || !d
+                  ? "Desativado"
+                  : "Online",
           ativo: s.status === "ativo",
           leitura: r ? `${r.valor} ${r.unidade}` : "Sem leitura",
           valor: r?.valor,
@@ -728,6 +896,7 @@ module.exports = async (req, res) => {
         situacao: i.status ? i.status[0].toUpperCase() + i.status.slice(1) : "Normal",
         problemas: i.descricao_problema,
         observacoes: i.observacoes,
+        sensor_id: i.sensor_id || null,
         criado_em: i.criado_em
       }));
       return reply(res, 200, { inspecoes: rows }, origin);
@@ -821,8 +990,10 @@ module.exports = async (req, res) => {
         return reply(res, 403, { mensagem: "Sem permissao." }, origin);
       }
 
+      const farms = await farmsForOrganization(c);
+      if (!farms.length) return reply(res, 503, { mensagem: "Fazenda nao configurada." }, origin);
       const [plots, devices, sensors, readings, inspections, cycles, occurrences, sensorProblems, alerts, cultivars, cultures] = await Promise.all([
-        db(c, "talhao", "GET", undefined, "?select=id,codigo,nome,area_hectares,coordenadas&order=codigo"),
+        db(c, "talhao", "GET", undefined, `?fazenda_id=in.(${farms.map((farm) => farm.id).join(",")})&select=id,codigo,nome,area_hectares,coordenadas&order=codigo`),
         db(c, "dispositivo", "GET", undefined, "?select=id,id_externo,talhao_id,status,ultimo_sinal_em"),
         db(c, "sensor", "GET", undefined, "?select=id,id_externo,dispositivo_id,codigo_metrica,unidade,status"),
         db(c, "v_ultima_leitura_sensor", "GET", undefined, "?select=*&limit=500"),
@@ -845,29 +1016,77 @@ module.exports = async (req, res) => {
         return {
           sensor: s.id_externo,
           talhao: d && plots.find((p) => p.id === d.talhao_id)?.codigo,
-          status: s.status !== "ativo" ? "Inativo" : d?.status === "offline" ? "Offline" : "Online",
+          status: s.status !== "ativo"
+            ? "Inativo"
+            : d?.status === "offline"
+              ? "Offline"
+              : d?.status === "manutencao"
+                ? "Manutencao"
+                : d?.status === "desativado" || !d
+                  ? "Desativado"
+                  : "Online",
           leitura: r ? `${r.valor} ${r.unidade}` : "Sem leitura",
           comunicacao: r?.coletado_em || d?.ultimo_sinal_em,
           id: s.id,
           tipo: s.codigo_metrica,
+          ativo: s.status === "ativo",
           valor: r?.valor,
           unidade: s.unidade
         };
       });
 
+      const ciclosOrdenados = [...cycles].sort((a, b) =>
+        String(b.plantado_em || "").localeCompare(String(a.plantado_em || ""))
+      );
+      const cicloAtivoPorTalhao = new Map();
+      for (const cycle of ciclosOrdenados) {
+        if (!cicloAtivoPorTalhao.has(cycle.talhao_id)) cicloAtivoPorTalhao.set(cycle.talhao_id, cycle);
+      }
       const talhoes = plots.map((p) => {
-        const s = sensorRows.find((x) => x.talhao === p.codigo && x.status !== "Inativo");
-        const semLeitura = !s || s.valor === null || s.valor === undefined;
-        const critical = s?.status === "Offline" || (s?.tipo === "umidadeSolo" && Number(s.valor) < 30);
-        const attention = s && s.tipo === "umidadeSolo" && Number(s.valor) < 40;
+        const sensoresDoTalhao = sensorRows.filter((item) => item.talhao === p.codigo);
+        const sensoresAtivos = sensoresDoTalhao.filter((item) => item.ativo);
+        const s = sensoresAtivos.find((item) => item.tipo === "umidadeSolo" && item.valor !== null && item.valor !== undefined)
+          || sensoresAtivos.find((item) => item.valor !== null && item.valor !== undefined)
+          || sensoresAtivos[0]
+          || sensoresDoTalhao[0];
+        const sensorDoSolo = sensoresAtivos.find((item) => item.tipo === "umidadeSolo");
+        const valorSolo = Number(sensorDoSolo?.valor);
+        const leituraSoloValida = sensorDoSolo?.valor !== null
+          && sensorDoSolo?.valor !== undefined
+          && Number.isFinite(valorSolo);
+        const semSensor = sensoresDoTalhao.length === 0;
+        const semSensorAtivo = !semSensor && sensoresAtivos.length === 0;
+        const semComunicacao = sensoresAtivos.some((item) =>
+          ["Offline", "Manutencao", "Desativado"].includes(item.status)
+        );
+        const semLeitura = sensoresAtivos.length === 0
+          || sensoresAtivos.every((item) => item.valor === null || item.valor === undefined);
+        const critical = leituraSoloValida && valorSolo < 30;
+        const attention = leituraSoloValida && valorSolo >= 30 && valorSolo < 40;
+        const cycle = cicloAtivoPorTalhao.get(p.id);
+        const cultivar = cycle && cultivarById.get(cycle.cultivar_id);
+        const produto = cultivar ? cultureById.get(cultivar.cultura_id) : null;
+        const culturaLabel = [produto, cultivar?.nome].filter(Boolean).join(" / ");
         return {
           id: p.codigo,
-          cultura: p.nome || p.codigo,
+          cultura: culturaLabel || "Sem plantio ativo",
           area: `${p.area_hectares} hectares`,
           sensor: s?.sensor,
           leitura: s?.leitura || "Sem leitura",
-          situacao: critical ? "Critico" : semLeitura ? "Sem leitura" : attention ? "Atencao" : "Normal",
-          prioridade: critical ? "Checar sensor e irrigacao" : semLeitura ? "Aguardando leitura de sensor" : attention ? "Verificar umidade do solo" : "Rotina de acompanhamento"
+          situacao: semSensor ? "Sem sensor"
+            : semSensorAtivo ? "Sensor inativo"
+              : semComunicacao ? "Sem comunicacao"
+                : critical ? "Critico"
+                  : semLeitura ? "Sem leitura"
+                    : attention ? "Atencao"
+                      : "Normal",
+          prioridade: semSensor ? "Cadastre um sensor para habilitar o monitoramento"
+            : semSensorAtivo ? "Ative um sensor para habilitar o monitoramento"
+              : semComunicacao ? "Verifique a comunicacao do sensor"
+                : critical ? "Umidade do solo abaixo de 30%"
+                  : semLeitura ? "Aguardando leitura de sensor"
+                    : attention ? "Verifique a umidade do solo"
+                      : "Rotina de acompanhamento"
         };
       });
 
@@ -883,7 +1102,9 @@ module.exports = async (req, res) => {
             talhao: plots.find((p) => p.id === i.talhao_id)?.codigo,
             situacao: i.status ? i.status[0].toUpperCase() + i.status.slice(1) : "Normal",
             problemas: i.descricao_problema,
-            observacoes: i.observacoes
+            observacoes: i.observacoes,
+            sensor_id: i.sensor_id || null,
+            sensor: sensors.find((s) => s.id === i.sensor_id)?.id_externo || null
           })),
           plantios: cycles.map((cycle) => {
             const cultivar = cultivarById.get(cycle.cultivar_id);
@@ -980,9 +1201,37 @@ module.exports = async (req, res) => {
         const plot = (await db(c, "talhao", "GET", undefined, `?codigo=eq.${encodeURIComponent(d.talhao)}&select=id&limit=1`))[0];
         if (!plot) return reply(res, 404, { mensagem: "Talhao nao encontrado." }, origin);
 
+        const sensorId = text(d.sensor_id, 80);
+        let linkedSensorId = null;
+        if (sensorId) {
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sensorId)) {
+            return reply(res, 400, { mensagem: "Identificador do sensor invalido." }, origin);
+          }
+          const sensor = (await db(
+            c,
+            "sensor",
+            "GET",
+            undefined,
+            `?id=eq.${encodeURIComponent(sensorId)}&status=eq.ativo&select=id,dispositivo_id&limit=1`
+          ))[0];
+          if (!sensor) return reply(res, 404, { mensagem: "O sensor selecionado nao esta ativo ou nao existe." }, origin);
+          const device = (await db(
+            c,
+            "dispositivo",
+            "GET",
+            undefined,
+            `?id=eq.${encodeURIComponent(sensor.dispositivo_id)}&select=talhao_id&limit=1`
+          ))[0];
+          if (!device || device.talhao_id !== plot.id) {
+            return reply(res, 400, { mensagem: "O sensor selecionado nao pertence ao talhao informado." }, origin);
+          }
+          linkedSensorId = sensor.id;
+        }
+
         await db(c, "inspecao", "POST", {
           talhao_id: plot.id,
           usuario_id: user.sub,
+          sensor_id: linkedSensorId,
           inspecionado_em: d.data,
           status: d.situacao.toLowerCase(),
           descricao_problema: text(d.problemas) || null,
@@ -1009,24 +1258,28 @@ module.exports = async (req, res) => {
       }
 
       if (route === "/sensores/problemas") {
-        if (!text(d.talhao) || !text(d.sensor) || !date(d.data) || !text(d.problema)) {
+        if (!text(d.talhao) || !date(d.data) || !text(d.problema)) {
           return reply(res, 400, { mensagem: "Dados de problema de sensor invalidos." }, origin);
         }
         const plot = (await db(c, "talhao", "GET", undefined, `?codigo=eq.${encodeURIComponent(d.talhao)}&select=id&limit=1`))[0];
         if (!plot) return reply(res, 404, { mensagem: "Talhao nao encontrado." }, origin);
 
-        const sensor = (await db(c, "sensor", "GET", undefined, `?id_externo=eq.${encodeURIComponent(d.sensor)}&select=id,dispositivo_id&limit=1`))[0];
-        if (!sensor) return reply(res, 404, { mensagem: "Sensor nao encontrado." }, origin);
-        const device = (await db(c, "dispositivo", "GET", undefined, `?id=eq.${encodeURIComponent(sensor.dispositivo_id)}&select=talhao_id&limit=1`))[0];
-        if (!device || device.talhao_id !== plot.id) {
-          return reply(res, 400, { mensagem: "O sensor selecionado nao pertence ao talhao informado." }, origin);
+        const sensorCodigo = text(d.sensor, 80);
+        let sensor = null;
+        if (sensorCodigo) {
+          sensor = (await db(c, "sensor", "GET", undefined, `?id_externo=eq.${encodeURIComponent(sensorCodigo)}&status=eq.ativo&select=id,dispositivo_id&limit=1`))[0];
+          if (!sensor) return reply(res, 404, { mensagem: "Sensor nao encontrado." }, origin);
+          const device = (await db(c, "dispositivo", "GET", undefined, `?id=eq.${encodeURIComponent(sensor.dispositivo_id)}&select=talhao_id&limit=1`))[0];
+          if (!device || device.talhao_id !== plot.id) {
+            return reply(res, 400, { mensagem: "O sensor selecionado nao pertence ao talhao informado." }, origin);
+          }
         }
         await db(c, "rpc/registrar_problema_sensor_com_alerta", "POST", {
-          p_sensor_id: sensor.id,
+          p_sensor_id: sensor?.id || null,
           p_talhao_id: plot.id,
           p_usuario_id: user.sub,
           p_talhao_codigo: text(d.talhao),
-          p_sensor_codigo: text(d.sensor),
+          p_sensor_codigo: sensorCodigo || "nao cadastrado",
           p_data: d.data,
           p_problema: text(d.problema),
           p_observacao: text(d.observacao) || null
@@ -1037,7 +1290,7 @@ module.exports = async (req, res) => {
 
     // 14. Gestão Administrativa de Funcionários (Admin)
     const employeeMatch = route.match(/^\/funcionarios\/([^/]+)$/);
-    if (employeeMatch && ["PUT", "DELETE"].includes(req.method)) {
+    if (employeeMatch && ["PUT", "PATCH", "DELETE"].includes(req.method)) {
       if (user.perfil !== "admin") return reply(res, 403, { mensagem: "Sem permissao." }, origin);
       const employeeId = decodeURIComponent(employeeMatch[1]);
       if (employeeId === String(user.sub)) {
@@ -1077,6 +1330,14 @@ module.exports = async (req, res) => {
         await db(c, `usuario?id=eq.${encodeURIComponent(employeeId)}`, "PATCH", updates);
         return reply(res, 200, { sucesso: true }, origin);
       }
+      if (req.method === "PATCH") {
+        const d = await parseBody(req);
+        if (!["ativo", "inativo"].includes(d.status)) {
+          return reply(res, 400, { mensagem: "Status de funcionario invalido." }, origin);
+        }
+        await db(c, `usuario?id=eq.${encodeURIComponent(employeeId)}`, "PATCH", { status: d.status });
+        return reply(res, 200, { sucesso: true, status: d.status }, origin);
+      }
       await db(c, `usuario?id=eq.${encodeURIComponent(employeeId)}`, "DELETE");
       return reply(res, 200, { sucesso: true }, origin);
     }
@@ -1102,6 +1363,7 @@ module.exports = async (req, res) => {
               perfil: r.perfil === "administrador" ? "admin" : r.perfil,
               cargo: r.cargo,
               profissao: r.profissao || "",
+              status: r.status,
               ativo: r.status === "ativo",
               created_at: r.criado_em
             }))
@@ -1148,6 +1410,9 @@ module.exports = async (req, res) => {
           senha_temporaria: true
         });
         const employee = Array.isArray(created) ? created[0] : created;
+        if (!employee?.id) {
+          throw new Error("O banco nao confirmou a gravacao do funcionario. Atualize o esquema e tente novamente.");
+        }
         return reply(res, 201, { sucesso: true, matricula, id: employee?.id }, origin);
       }
     }

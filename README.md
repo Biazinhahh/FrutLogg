@@ -46,7 +46,9 @@ A arquitetura do FrutLog é projetada para garantir segurança, desacoplamento e
 
 O banco de dados foi unificado no **modelo operacional singular**. O esquema cria estrutura, restrições, índices, triggers, views e partições, mas não insere usuários, fazendas, talhões, sensores ou registros operacionais de exemplo:
 
-📁 [`supabase/schema.sql`](supabase/schema.sql)
+📁 [`supabase/schema_oficial_atualizado.sql`](supabase/schema_oficial_atualizado.sql) (referência consolidada para uma instalação nova).
+
+`supabase/schema.sql` e as migrações numeradas são mantidos para preservar o histórico; não reaplique o esquema de referência em um banco já em operação.
 
 ### Tabelas Principais
 *   `organizacao`: Entidade gestora da propriedade.
@@ -65,8 +67,8 @@ O banco de dados foi unificado no **modelo operacional singular**. O esquema cri
 ## 🚀 Como Executar o Projeto
 
 ### 1. Configurar o Banco de Dados
-1. Em uma instalação nova, abra o **SQL Editor** do Supabase e execute `supabase/schema.sql`.
-2. Execute, na ordem, `supabase/006_particionamento_dinamico_telemetria.sql`, `supabase/007_admin_and_map_sync.sql`, `supabase/008_relatorios_diarios.sql`, `supabase/009_bootstrap_super_admin.sql`, `supabase/010_alertas_de_campo.sql`, `supabase/011_profissao_usuario.sql`, `supabase/012_bootstrap_admin_login.sql`, `supabase/015_reparar_esquema_operacional.sql`, `supabase/016_reparar_painel_engenheiro.sql` e `supabase/017_corrigir_codigo_ambiguo_talhoes.sql` para instalar particionamento de telemetria, sincronização de mapas, credenciais provisórias, relatórios diários, bootstrap inicial, alertas de campo, profissão no cadastro da equipe, matrícula `admin` e reparar as tabelas de colheitas, sensores, plantios, mapas e salvamento de geometrias.
+1. Em uma instalação nova, abra o **SQL Editor** do Supabase e execute `supabase/schema_oficial_atualizado.sql`.
+2. Em instalações existentes, aplique apenas as migrações pendentes na ordem histórica: `006`, `007`, `008`, `009`, `010`, `011`, `012` e `014` a `022` (sem reaplicar o esquema-base; `013` é uma rotina de recuperação de senha de Admin). A 018 repara colunas de ciclos e inspeções e a tabela de ocorrências; a 019 permite excluir sensores com suas leituras e corrige a visão de telemetria; a 020 completa a coluna de usuário do ciclo e permite colheitas sem ciclo ativo; a 021 registra o autor da colheita; a 022 mantém o registro de problemas mesmo quando não há sensor cadastrado.
 3. Não execute importações legadas para inicializar uma instalação vazia. Em ambientes existentes, preserve e revise os dados antes de aplicar qualquer script de migração.
 
 ### 2. Configurar Variáveis de Ambiente
@@ -89,6 +91,12 @@ THINGSPEAK_FIELD_RAINFALL=4
 ```
 
 Preencha os valores ThingSpeak com o canal real do hardware e mantenha a chave de leitura apenas no `.env` do servidor. Os números de campo são ajustáveis caso o firmware publique métricas em outra ordem.
+
+O relatório diário é salvo no banco e fica disponível nas telas de Engenharia e Administração; o sistema não envia e-mail nem notificação externa. O cadastro inicial do administrador exibe a senha provisória somente uma vez. Se ela foi perdida, defina temporariamente `ADMIN_RESET_PASSWORD` no `.env` (8 a 10 caracteres) e execute `npm.cmd run reset-admin-password`; a rotina altera a senha da matrícula `admin` existente e solicita sua troca no próximo acesso. Remova o valor temporário do `.env` depois da redefinição. Isso não cria uma segunda conta nem habilita uma conta desativada.
+
+O Administrador cadastra os sensores e os associa a um talhão. Engenharia e Técnico visualizam os sensores ativos desse talhão; na inspeção, o sensor é opcional e só pode ser escolhido se estiver cadastrado naquele talhão. O sensor aparecer como cadastrado/ativo não significa que já transmitiu leituras: o status Online depende da comunicação do dispositivo. Edições do mapa salvas pela Engenharia ficam no banco; os demais painéis atualizam ao voltar à página ou em até 15 segundos. O cadastro de colheita pode ser vinculado ao ciclo ativo mais recente do talhão; sem ciclo ativo, o registro de colheita continua permitido.
+
+O assistente web do Admin busca ocorrências recentes e o estado dos sensores através da API autenticada. O chatbot independente em `chatboot/` pode usar o mesmo contexto se `FRUTLOG_API_TOKEN` estiver configurado localmente; consulte `chatboot/README.md`.
 
 As senhas novas, temporárias ou alteradas devem possuir de 8 a 10 caracteres. Esta validação também é aplicada no endpoint de login; contas existentes com senhas maiores que 10 caracteres precisarão ter a credencial redefinida antes de adotar esta versão.
 

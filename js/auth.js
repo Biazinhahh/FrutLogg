@@ -1,5 +1,5 @@
 /* =========================================================
-   FRUTLOG - CONFIGURACAO, API E SESSAO
+   FRUTLOG - AUTENTICACAO, API E SESSAO
    A seguranca real deve permanecer no backend.
    ========================================================= */
 

@@ -23,10 +23,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   window.addEventListener("frutlog:talhoes-atualizados", atualizarDadosCampoConectados);
-  try {
-    await carregarDadosConectados();
-  } catch (erro) {
-    exibirMensagem("mensagem-carregamento-admin", `Falha ao carregar os dados: ${erro.message}`, "erro");
+  const inicializacoes = await Promise.allSettled([
+    carregarDadosConectados(),
+    carregarMapaAdmin(),
+  ]);
+  const errosInicializacao = inicializacoes
+    .filter((resultado) => resultado.status === "rejected")
+    .map((resultado) => resultado.reason?.message || String(resultado.reason));
+  renderizarMapaAdmin();
+  if (errosInicializacao.length) {
+    exibirMensagem("mensagem-carregamento-admin", `Falha ao carregar os dados: ${errosInicializacao.join(" | ")}`, "erro");
   }
 });
 
@@ -171,7 +177,7 @@ function configurarFormularioFuncionario() {
           body: JSON.stringify(payload),
         });
         funcionarios = funcionarios.map((item) => String(item.id) === String(dados.id)
-          ? { ...item, ...payload, ativo: payload.status === "ativo" }
+          ? { ...item, ...payload, status: payload.status, ativo: payload.status === "ativo" }
           : item);
         exibirMensagem(mensagemId, "Funcionario atualizado.", "sucesso");
       } else {
@@ -186,6 +192,7 @@ function configurarFormularioFuncionario() {
           cargo: dados.cargo,
           profissao: dados.profissao,
           perfil: dados.perfil,
+          status: dados.status,
           ativo: dados.status === "ativo",
         };
         funcionarios.push(novoFuncionario);
@@ -219,7 +226,7 @@ function carregarFuncionarios() {
   const termo = document.getElementById("filtro-funcionarios")?.value.trim().toLocaleLowerCase("pt-BR") || "";
   const statusFiltro = document.getElementById("filtro-status-funcionarios")?.value || "todos";
   const filtrados = funcionarios.filter((funcionario) => {
-    const ativo = typeof funcionario.ativo === "boolean" ? funcionario.ativo : funcionario.status === "ativo";
+    const ativo = funcionario.status ? funcionario.status === "ativo" : funcionario.ativo === true;
     const combinaStatus = statusFiltro === "todos" || (statusFiltro === "ativo" ? ativo : !ativo);
     const texto = [funcionario.matricula, funcionario.nome, funcionario.cargo, funcionario.profissao, funcionario.perfil]
       .join(" ").toLocaleLowerCase("pt-BR");
@@ -232,7 +239,11 @@ function carregarFuncionarios() {
   }
 
   tabela.innerHTML = filtrados.map((funcionario) => {
-    const ativo = typeof funcionario.ativo === "boolean" ? funcionario.ativo : funcionario.status === "ativo";
+    const ativo = funcionario.status
+      ? funcionario.status === "ativo"
+      : funcionario.ativo === true;
+    const status = ativo ? "ativo" : (funcionario.status || "inativo");
+    const textoStatus = status === "excluido" ? "Excluido" : ativo ? "Ativo" : "Inativo";
     return `
       <tr>
         <td>${escaparHtml(funcionario.matricula)}</td>
@@ -240,8 +251,9 @@ function carregarFuncionarios() {
         <td>${escaparHtml(funcionario.cargo)}</td>
         <td>${escaparHtml(funcionario.profissao || "--")}</td>
         <td>${escaparHtml(funcionario.perfil)}</td>
-        <td><span class="badge-status ${ativo ? "normal" : "inativo"}">${ativo ? "Ativo" : "Inativo"}</span></td>
+        <td><span class="badge-status ${status}">${textoStatus}</span></td>
         <td>
+          <button class="btn-acao-admin" type="button" data-alternar-funcionario="${escaparHtml(funcionario.id)}" ${String(funcionario.id) === String(FrutLog.obterSessao()?.id) ? "disabled" : ""} aria-label="${ativo ? "Desativar" : "Ativar"} ${escaparHtml(funcionario.nome)}">${ativo ? "Desativar" : "Ativar"}</button>
           <button class="btn-acao-admin" type="button" data-editar-funcionario="${escaparHtml(funcionario.id)}" ${String(funcionario.id) === String(FrutLog.obterSessao()?.id) ? "disabled" : ""} aria-label="Editar ${escaparHtml(funcionario.nome)}">Editar</button>
           <button class="btn-acao-admin btn-excluir-admin" type="button" data-excluir-funcionario="${escaparHtml(funcionario.id)}" ${String(funcionario.id) === String(FrutLog.obterSessao()?.id) ? "disabled" : ""} aria-label="Excluir ${escaparHtml(funcionario.nome)}">Excluir</button>
         </td>
@@ -256,6 +268,33 @@ function configurarFiltrosFuncionarios() {
 
 function configurarAcoesTabelas() {
   document.getElementById("tabela-funcionarios")?.addEventListener("click", async (evento) => {
+    const botaoStatus = evento.target.closest("[data-alternar-funcionario]");
+    if (botaoStatus) {
+      const id = botaoStatus.dataset.alternarFuncionario;
+      const funcionario = funcionarios.find((item) => String(item.id) === String(id));
+      if (!funcionario) return;
+
+      const status = (funcionario.status ? funcionario.status === "ativo" : funcionario.ativo === true)
+        ? "inativo"
+        : "ativo";
+      botaoStatus.disabled = true;
+      try {
+        await FrutLog.apiFetch(`/funcionarios/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+        funcionarios = funcionarios.map((item) => String(item.id) === String(id)
+          ? { ...item, status, ativo: status === "ativo" }
+          : item);
+        renderizarFuncionarios();
+        exibirMensagem("mensagem-funcionario", `Funcionario ${status === "ativo" ? "ativado" : "desativado"}.`, "sucesso");
+      } catch (erro) {
+        botaoStatus.disabled = false;
+        exibirMensagem("mensagem-funcionario", erro.message, "erro");
+      }
+      return;
+    }
+
     const botaoEditar = evento.target.closest("[data-editar-funcionario]");
     if (botaoEditar) {
       const funcionario = funcionarios.find((item) => String(item.id) === botaoEditar.dataset.editarFuncionario);
@@ -266,7 +305,7 @@ function configurarAcoesTabelas() {
       document.getElementById("funcionario-cargo").value = funcionario.cargo;
       document.getElementById("funcionario-profissao").value = funcionario.profissao || "";
       document.getElementById("funcionario-perfil").value = funcionario.perfil;
-      document.getElementById("funcionario-status").value = funcionario.ativo ? "ativo" : "inativo";
+      document.getElementById("funcionario-status").value = funcionario.status || (funcionario.ativo ? "ativo" : "inativo");
       document.getElementById("funcionario-senha").value = "";
       document.getElementById("funcionario-senha").required = false;
       document.getElementById("funcionario-senha").type = "text";
@@ -379,7 +418,11 @@ function configurarFormularioSensor() {
 }
 
 function normalizarStatus(valor) {
-  return String(valor || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 function renderizarFuncionarios() {
@@ -390,7 +433,7 @@ function preencherSelectTalhoes() {
   const select = document.getElementById("sensor-talhao");
   if (!select) return;
   const selecionado = select.value;
-  const codigos = (window.FrutLogTalhoes?.obterTalhoes() || [])
+  const codigos = (typeof FrutLogTalhoes === "undefined" ? [] : FrutLogTalhoes.obterTalhoes())
     .map((feature) => feature.properties.codigo);
   for (const talhao of painelTecnico.talhoes || []) {
     if (talhao.id && !codigos.includes(talhao.id)) codigos.push(talhao.id);
@@ -462,8 +505,9 @@ function renderizarPainelTecnico() {
       <td><span class="badge-status ${normalizarStatus(talhao.situacao || talhao.status)}">${escaparHtml(talhao.situacao || talhao.status || "--")}</span></td>
       <td>${escaparHtml(talhao.prioridade || "--")}</td>
     </tr>`));
-  preencherTabela("tabela-inspecoes-admin", 5, inspecoes.map((item) => `
+  preencherTabela("tabela-inspecoes-admin", 6, inspecoes.map((item) => `
     <tr><td>${formatarData(item.data)}</td><td>${escaparHtml(item.talhao)}</td>
+      <td>${escaparHtml(item.sensor || "--")}</td>
       <td><span class="badge-status ${normalizarStatus(item.situacao)}">${escaparHtml(item.situacao)}</span></td>
       <td>${escaparHtml(item.problemas || "Sem ocorrencia")}</td><td>${escaparHtml(item.observacoes || "--")}</td></tr>`));
   preencherTabela("tabela-plantios-admin", 5, plantios.map((item) => `
@@ -490,35 +534,39 @@ function renderizarPainelTecnico() {
 
 function renderizarMapaAdmin() {
   const mapa = document.getElementById("mapa-talhoes-admin");
-  if (!mapa || !window.FrutLogTalhoes) return;
+  if (!mapa || typeof FrutLogTalhoes === "undefined") return;
   const features = FrutLogTalhoes.obterTalhoes();
   const estados = new Map((painelTecnico.talhoes || []).map((item) => [item.id, item.situacao || item.status]));
-  mapa.replaceChildren();
-  features.forEach((feature) => {
-    const codigo = feature.properties.codigo;
-    const poligono = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    poligono.setAttribute("points", FrutLogTalhoes.obterPontos(feature).map((ponto) => ponto.join(",")).join(" "));
-    poligono.dataset.talhao = codigo;
-    poligono.classList.add("talhao-mapa", `status-${normalizarStatus(estados.get(codigo) || feature.properties.status)}`);
-    poligono.setAttribute("tabindex", "0");
-    poligono.setAttribute("role", "button");
-    poligono.setAttribute("aria-label", `Talhao ${codigo}`);
-    const selecionar = () => {
+  exibirMensagem(
+    "mensagem-mapa-admin",
+    features.length
+      ? `${features.length} talhao(es) carregado(s) do servidor.`
+      : "Nenhum talhao retornado pelo servidor. Verifique os cadastros e a fazenda vinculada."
+  );
+  const renderizados = FrutLogMapaTalhoes.renderizarMapaTalhoes(mapa, features, {
+    statusFor: (feature) => estados.get(feature.properties.codigo) || feature.properties.status,
+    onSelect: (feature, evento, poligono) => {
+      const codigo = feature.properties.codigo;
       mapa.querySelectorAll(".talhao-mapa").forEach((item) => item.classList.toggle("selecionado", item === poligono));
       const dados = (painelTecnico.talhoes || []).find((item) => item.id === codigo);
       exibirMensagem("mensagem-dados-tecnicos", dados
         ? `Talhao ${codigo}: ${dados.situacao || "sem situacao"}; leitura ${dados.leitura || "indisponivel"}.`
         : `Talhao ${codigo} selecionado.`);
-    };
-    poligono.addEventListener("click", selecionar);
-    poligono.addEventListener("keydown", (evento) => {
-      if (evento.key === "Enter" || evento.key === " ") {
-        evento.preventDefault();
-        selecionar();
-      }
-    });
-    mapa.appendChild(poligono);
+    },
   });
+  exibirMensagem(
+    "mensagem-mapa-admin",
+    renderizados
+      ? `${renderizados} divisao(oes) de talhao renderizada(s) com dados do servidor.`
+      : "Os talhoes foram carregados, mas nenhum possui coordenadas validas para desenhar."
+  );
+}
+
+function classeStatusMapa(valor) {
+  const normalizado = normalizarStatus(valor).replace(/\s+/g, "-");
+  return ["normal", "atencao", "critico", "sem-leitura", "sem-sensor", "sem-comunicacao", "sensor-inativo", "manutencao"].includes(normalizado)
+    ? normalizado
+    : "sem-leitura";
 }
 
 function renderizarTelemetriaDiariaAdmin() {
@@ -636,7 +684,6 @@ async function carregarDadosConectados() {
     FrutLog.apiFetch("/funcionarios"),
     FrutLog.apiFetch("/sensores"),
     FrutLog.apiFetch("/painel-tecnico"),
-    FrutLog.apiFetch("/talhoes"),
     FrutLog.apiFetch("/colheitas/anual"),
     FrutLog.apiFetch("/telemetria/diaria"),
   ]);
@@ -662,31 +709,21 @@ async function carregarDadosConectados() {
   if (resultados[2].status === "fulfilled") {
     painelTecnico = resultados[2].value;
     renderizarPainelTecnico();
-    renderizarMapaAdmin();
   } else {
     erros.push(`Dados de campo: ${resultados[2].reason.message}`);
     exibirMensagem("mensagem-dados-tecnicos", resultados[2].reason.message, "erro");
   }
 
   if (resultados[3].status === "fulfilled") {
-    if (window.FrutLogTalhoes) {
-      FrutLogTalhoes.carregarDoServidor(resultados[3].value.talhoes || []);
-      renderizarMapaAdmin();
-      preencherSelectTalhoes();
-    }
+    definirColheitasAnuais(resultados[3].value.colheitas);
   } else {
-    erros.push(`Geometrias: ${resultados[3].reason.message}`);
+    erros.push(`Colheitas: ${resultados[3].reason.message}`);
   }
   if (resultados[4].status === "fulfilled") {
-    definirColheitasAnuais(resultados[4].value.colheitas);
-  } else {
-    erros.push(`Colheitas: ${resultados[4].reason.message}`);
-  }
-  if (resultados[5].status === "fulfilled") {
-    telemetriaDiariaAdmin = resultados[5].value.leituras || [];
+    telemetriaDiariaAdmin = resultados[4].value.leituras || [];
     renderizarTelemetriaDiariaAdmin();
   } else {
-    erros.push(`Telemetria diaria: ${resultados[5].reason.message}`);
+    erros.push(`Telemetria diaria: ${resultados[4].reason.message}`);
     mostrarLinhasVazias("tabela-telemetria-admin", 7, "Falha ao carregar telemetria diaria.");
   }
 
@@ -703,28 +740,62 @@ async function carregarDadosConectados() {
   }
 }
 
+async function carregarMapaAdmin() {
+  await FrutLogMapaTalhoes.carregarMapaTalhoes("admin");
+  preencherSelectTalhoes();
+  renderizarMapaAdmin();
+}
+
+window.addEventListener("focus", atualizarDadosCampoConectados);
+
 async function atualizarDadosCampoConectados() {
-  try {
-    const [painel, geometria, dadosSensores, colheitas, telemetria] = await Promise.all([
-      FrutLog.apiFetch("/painel-tecnico"),
-      FrutLog.apiFetch("/talhoes"),
-      FrutLog.apiFetch("/sensores"),
-      FrutLog.apiFetch("/colheitas/anual"),
-      FrutLog.apiFetch("/telemetria/diaria"),
-    ]);
-    painelTecnico = painel;
-    sensores = dadosSensores.sensores || [];
-    definirColheitasAnuais(colheitas.colheitas);
+  const resultados = await Promise.allSettled([
+    FrutLog.apiFetch("/painel-tecnico"),
+    FrutLog.apiFetch("/sensores"),
+    FrutLog.apiFetch("/colheitas/anual"),
+    FrutLog.apiFetch("/telemetria/diaria"),
+    carregarMapaAdmin(),
+  ]);
+  const erros = [];
+
+  if (resultados[0].status === "fulfilled") {
+    painelTecnico = resultados[0].value;
     renderizarPainelTecnico();
+    renderizarMapaAdmin();
+  } else {
+    erros.push(`Dados de campo: ${resultados[0].reason.message}`);
+  }
+
+  if (resultados[1].status === "fulfilled") {
+    sensores = resultados[1].value.sensores || [];
     renderizarSensores();
     renderizarGraficoLeituras();
+  } else {
+    erros.push(`Sensores: ${resultados[1].reason.message}`);
+  }
+
+  if (resultados[2].status === "fulfilled") {
+    definirColheitasAnuais(resultados[2].value.colheitas);
     renderizarGraficoColheita();
-    telemetriaDiariaAdmin = telemetria.leituras || [];
+  } else {
+    erros.push(`Colheitas: ${resultados[2].reason.message}`);
+  }
+
+  if (resultados[3].status === "fulfilled") {
+    telemetriaDiariaAdmin = resultados[3].value.leituras || [];
     renderizarTelemetriaDiariaAdmin();
-    FrutLogTalhoes.carregarDoServidor(geometria.talhoes || []);
-    renderizarMapaAdmin();
-  } catch (erro) {
-    console.error("Falha ao sincronizar dados operacionais:", erro);
-    exibirMensagem("mensagem-carregamento-admin", `Falha ao atualizar dados: ${erro.message}`, "erro");
+  } else {
+    erros.push(`Telemetria diaria: ${resultados[3].reason.message}`);
+  }
+
+  if (resultados[4].status === "rejected") {
+    erros.push(`Geometrias: ${resultados[4].reason.message}`);
+  }
+
+  if (erros.length) {
+    console.error("Falha ao sincronizar dados operacionais:", erros.join(" | "));
+    exibirMensagem("mensagem-carregamento-admin", erros.join(" | "), "erro");
+  } else {
+    exibirMensagem("mensagem-carregamento-admin", "Dados atualizados do servidor.", "sucesso");
   }
 }

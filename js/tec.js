@@ -60,6 +60,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       exibirMensagem("mensagem-dados-tecnicos", erro.message, "erro");
     }
   });
+  window.addEventListener("focus", () => {
+    if (FrutLog.AUTENTICACAO_API_ATIVA) {
+      window.dispatchEvent(new Event("frutlog:talhoes-atualizados"));
+    }
+  });
 });
 
 let talhoes = FrutLogTalhoes.obterTalhoes();
@@ -72,6 +77,7 @@ let painelTecnico = {};
 let graficoMetricas = null;
 let telemetriaDiaria = [];
 let telemetriaMensal = [];
+let talhaoSelecionadoId = null;
 
 function dataLocalISO() {
   const hoje = new Date();
@@ -138,7 +144,7 @@ function configurarRelatorioDiario() {
       });
       exibirMensagem(
         "mensagem-relatorio-diario",
-        `Relatorio enviado para Engenharia e Administracao (${formatarData(resposta.relatorio.data_relatorio)}).`,
+        `Relatório registrado e disponível para Engenharia e Administração (${formatarData(resposta.relatorio.data_relatorio)}).`,
         "sucesso"
       );
       formulario.reset();
@@ -180,13 +186,14 @@ function atualizarTalhoesMonitorados() {
 }
 
 async function carregarPainelTecnico() {
-  const [painel, respostaTalhoes] = await Promise.all([
+  const [painel, talhoesServidor] = await Promise.all([
     FrutLog.apiFetch("/painel-tecnico"),
-    FrutLog.apiFetch("/talhoes"),
+    FrutLogMapaTalhoes.carregarMapaTalhoes("tecnico"),
   ]);
   painelTecnico = painel;
   sensoresDoServidor = painel.sensores || [];
-  talhoes = FrutLogTalhoes.carregarDoServidor(respostaTalhoes.talhoes || []);
+  talhoes = talhoesServidor;
+  atualizarSelectSensoresInspecao();
 
   const plantioPorTalhao = new Map((painel.plantios || []).map((plantio) => [plantio.talhao, plantio]));
   const monitoramentoPorTalhao = new Map((painel.talhoes || []).map((talhao) => [talhao.id, talhao]));
@@ -393,8 +400,27 @@ function obterAlertas() {
 function preencherSelectTalhoes(select) {
   if (!select) return;
 
-  select.innerHTML = '<option value="">Selecione o talhao</option>' + talhoes
-    .map((feature) => `<option value="${feature.properties.codigo}">${feature.properties.codigo}</option>`)
+  const atual = select.value;
+  const opcoes = talhoes
+    .map((feature) => {
+      const codigo = escaparHtml(feature.properties.codigo);
+      return `<option value="${codigo}">${codigo}</option>`;
+    })
+    .join("");
+  select.innerHTML = `<option value="">${opcoes ? "Selecione o talhao" : "Nenhum talhao carregado"}</option>${opcoes}`;
+  if (talhoes.some((feature) => feature.properties.codigo === atual)) select.value = atual;
+}
+
+function atualizarSelectSensoresInspecao() {
+  const select = document.getElementById("inspecao-sensor");
+  const codigoTalhao = document.getElementById("inspecao-talhao")?.value;
+  if (!select) return;
+  const sensores = sensoresDoServidor.filter((sensor) => sensor.ativo && sensor.talhao === codigoTalhao);
+  select.innerHTML = '<option value="">Sem sensor associado</option>' + sensores
+    .map((sensor) => {
+      const status = sensor.status === "Online" ? "Online" : "Cadastrado, aguardando leitura";
+      return `<option value="${escaparHtml(sensor.id)}">${escaparHtml(sensor.sensor)} - ${escaparHtml(sensor.tipo)} (${status})</option>`;
+    })
     .join("");
 }
 
@@ -445,15 +471,19 @@ function carregarTalhoes() {
     "ocorrencia-talhao",
     "problema-sensor-talhao",
   ].forEach((id) => preencherSelectTalhoes(document.getElementById(id)));
+  atualizarSelectSensoresInspecao();
 }
 
 function renderizarBotoesTalhao() {
   const botoesTalhao = document.getElementById("botoes-talhao");
   if (!botoesTalhao) return;
 
-  botoesTalhao.innerHTML = talhoes.map((feature, index) => {
+  if (!talhoes.some((feature) => feature.properties.codigo === talhaoSelecionadoId)) {
+    talhaoSelecionadoId = talhoes[0]?.properties.codigo || null;
+  }
+  botoesTalhao.innerHTML = talhoes.map((feature) => {
     const codigo = feature.properties.codigo;
-    const ativo = index === 0 ? " active" : "";
+    const ativo = codigo === talhaoSelecionadoId ? " active" : "";
     return `<button class="btn-talhao${ativo}" type="button" data-talhao="${escaparHtml(codigo)}">${escaparHtml(codigo)}</button>`;
   }).join("");
 }
@@ -463,26 +493,20 @@ function renderizarMapa() {
   if (!svgMapa) return;
 
   atualizarTalhoesMonitorados();
-  svgMapa.innerHTML = "";
   const pendentes = talhoes.filter((feature) => feature.properties.geometriaPendente).length;
   preencherTexto(
     "mensagem-geometria-talhoes",
-    pendentes ? `${pendentes} talhao(es) ainda sem limites desenhados no mapa. A Engenharia pode concluir o desenho.` : ""
+    !talhoes.length
+      ? "Nenhum talhao retornado pelo servidor. Verifique os cadastros e a fazenda vinculada."
+      : pendentes
+        ? `${pendentes} talhao(es) ainda sem limites desenhados no mapa. A Engenharia pode concluir o desenho.`
+        : `${talhoes.length} talhao(es) carregado(s) do servidor.`
   );
 
-  talhoes.forEach((feature, index) => {
-    const props = feature.properties;
-    const poligono = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-
-    poligono.setAttribute("points", pontosParaString(obterPontos(feature)));
-    poligono.dataset.talhao = props.codigo;
-    poligono.classList.add("talhao-mapa", `status-${normalizarClasse(props.status)}`);
-    poligono.classList.toggle("selecionado", index === 0);
-    poligono.setAttribute("tabindex", "0");
-    poligono.setAttribute("role", "button");
-    poligono.setAttribute("aria-label", `Talhão ${props.codigo}`);
-    poligono.addEventListener("click", () => selecionarTalhao(props.codigo));
-    svgMapa.appendChild(poligono);
+  FrutLogMapaTalhoes.renderizarMapaTalhoes(svgMapa, talhoes, {
+    selectedCode: talhaoSelecionadoId,
+    statusFor: (feature) => feature.properties.status,
+    onSelect: (feature) => selecionarTalhao(feature.properties.codigo),
   });
 }
 
@@ -494,6 +518,7 @@ function carregarHistoricoInspecoes() {
     <tr>
       <td>${formatarData(inspecao.data)}</td>
       <td>${escaparHtml(inspecao.talhao)}</td>
+      <td>${escaparHtml(inspecao.sensor || "--")}</td>
       <td><span class="status-sensor ${normalizarClasse(inspecao.situacao)}">${escaparHtml(inspecao.situacao)}</span></td>
       <td>${escaparHtml(inspecao.problemas || "Sem ocorrência")}</td>
       <td>${escaparHtml(inspecao.observacoes || "-")}</td>
@@ -544,6 +569,7 @@ function selecionarTalhao(idTalhao) {
   const talhao = talhoes.find((item) => item.properties.codigo === idTalhao);
   if (!talhao) return;
 
+  talhaoSelecionadoId = idTalhao;
   const props = talhao.properties;
   const monitoramento = props.monitoramento || {};
 
@@ -571,8 +597,15 @@ function selecionarTalhao(idTalhao) {
   const badge = document.getElementById("tecnico-talhao-status");
   if (badge) {
     badge.textContent = props.status;
-    badge.className = `badge-status ${normalizarClasse(props.status)}`;
+    badge.className = `badge-status ${classeStatusMapa(props.status)}`;
   }
+}
+
+function classeStatusMapa(status) {
+  const normalizado = normalizarClasse(status).replace(/\s+/g, "-");
+  return ["normal", "atencao", "critico", "sem-leitura"].includes(normalizado)
+    ? normalizado
+    : "normal";
 }
 
 function configurarMapaTalhoes() {
@@ -606,7 +639,8 @@ function carregarSensores() {
   }
 
   if (selectSensor) {
-    selectSensor.innerHTML = '<option value="">Selecione o sensor</option>' + sensores
+    selectSensor.innerHTML = '<option value="">Sensor ausente / não cadastrado</option>' + sensores
+      .filter((item) => item.ativo)
       .map((item) => `<option value="${escaparHtml(item.sensor)}">${escaparHtml(item.sensor)}</option>`)
       .join("");
   }
@@ -724,6 +758,7 @@ async function registrarInspecao(evento) {
         talhao: dados.talhao,
         data: dados.data,
         situacao: dados.situacao,
+        sensor_id: dados.sensor_id || null,
         problemas: dados.problemas || "Sem ocorrencia",
         observacoes: dados.observacoes || "-"
       })
@@ -788,6 +823,8 @@ async function registrarProblemaSensor(evento) {
 
 function configurarFormularios() {
   document.getElementById("form-inspecao")?.addEventListener("submit", registrarInspecao);
+  document.getElementById("inspecao-talhao")?.addEventListener("change", atualizarSelectSensoresInspecao);
+  atualizarSelectSensoresInspecao();
   document.getElementById("form-ocorrencia")?.addEventListener("submit", registrarOcorrencia);
   document.getElementById("form-problema-sensor")?.addEventListener("submit", registrarProblemaSensor);
   document.getElementById("filtro-talhao-telemetria")?.addEventListener("change", renderizarTelemetriaDiaria);

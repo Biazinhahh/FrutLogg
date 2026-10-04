@@ -1,9 +1,10 @@
 -- ==============================================================================
--- FrutLog — Esquema de Banco de Dados Unificado (Modelo Operacional Singular)
+-- FrutLog — Esquema Oficial Consolidado (Modelo Operacional Singular)
 -- ==============================================================================
--- Este arquivo cria o esquema operacional base sem dados de exemplo.
--- Recursos incrementais da API sao instalados pelas migracoes numeradas.
--- Execute este script integralmente no SQL Editor do seu projeto Supabase.
+-- Modelo definitivo para instalacoes novas: tabelas, status, views, RPCs,
+-- relatorios e politicas de acesso usados pela API Node.js.
+-- As migracoes numeradas permanecem como historico/atualizacao de instalacoes existentes.
+-- Execute este arquivo integralmente no SQL Editor de um projeto Supabase novo.
 -- ==============================================================================
 
 begin;
@@ -269,6 +270,256 @@ create table if not exists public.evento_auditoria (
   criado_em timestamptz not null default now()
 );
 
+-- 4.16 Relatorio diario de campo (painel do Tecnico e Engenharia)
+create table if not exists public.relatorio_campo_diario (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid references public.usuario(id) on delete set null,
+  tecnico_nome varchar(255) not null,
+  data_relatorio date not null,
+  conteudo text not null constraint relatorio_conteudo_nao_vazio
+    check (length(btrim(conteudo)) > 0 and length(conteudo) <= 6000),
+  status varchar(20) not null default 'enviado'
+    constraint relatorio_status_valido check (status in ('enviado', 'em_analise', 'concluido')),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  constraint relatorio_unico_por_tecnico_dia unique (usuario_id, data_relatorio)
+);
+
+create index if not exists relatorio_campo_diario_data_idx
+  on public.relatorio_campo_diario (data_relatorio desc, criado_em desc);
+
+-- Matrículas sequenciais para cadastro de funcionários pelo painel Admin.
+create sequence if not exists public.usuario_matricula_seq;
+
+do $$
+declare
+  proxima_matricula bigint;
+begin
+  select greatest(coalesce(max(matricula::bigint), 4000) + 1, 4001)
+    into proxima_matricula
+    from public.usuario
+   where matricula ~ '^[0-9]{1,18}$';
+
+  perform setval('public.usuario_matricula_seq', proxima_matricula, false);
+end;
+$$;
+
+create or replace function public.proxima_matricula_funcionario()
+returns text
+language sql
+volatile
+security definer
+set search_path = public
+as $$
+  select nextval('public.usuario_matricula_seq')::text;
+$$;
+
+revoke all on function public.proxima_matricula_funcionario() from public;
+grant execute on function public.proxima_matricula_funcionario() to service_role;
+
+-- Geometrias atualizadas pelo Engenheiro e compartilhadas pelos tres paineis.
+create or replace function public.salvar_geometrias_talhoes(
+  p_fazenda_id uuid,
+  p_features jsonb,
+  p_removidos text[] default '{}'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_item jsonb;
+  v_codigo text;
+  v_nome_talhao text;
+  v_area_hectares numeric;
+  v_coordenadas jsonb;
+  v_resultado jsonb := '[]'::jsonb;
+begin
+  if p_fazenda_id is null or coalesce(jsonb_typeof(p_features), '') <> 'array' then
+    return jsonb_build_object('erro', 'Dados de geometria invalidos.');
+  end if;
+
+  if not exists (select 1 from public.fazenda where id = p_fazenda_id) then
+    return jsonb_build_object('erro', 'Fazenda nao encontrada.');
+  end if;
+
+  foreach v_codigo in array coalesce(p_removidos, '{}') loop
+    if exists (
+      select 1
+        from public.talhao t
+       where t.fazenda_id = p_fazenda_id
+         and t.codigo = v_codigo
+         and (
+           exists (select 1 from public.ciclo_cultura c where c.talhao_id = t.id)
+           or exists (select 1 from public.inspecao i where i.talhao_id = t.id)
+           or exists (select 1 from public.ocorrencia o where o.talhao_id = t.id)
+           or exists (select 1 from public.dispositivo d where d.talhao_id = t.id)
+           or exists (select 1 from public.problema_sensor p where p.talhao_id = t.id)
+           or exists (select 1 from public.alerta a where a.talhao_id = t.id)
+         )
+    ) then
+      return jsonb_build_object('erro', format('O talhao %s possui historico ou sensores associados e nao pode ser removido.', v_codigo));
+    end if;
+  end loop;
+
+  for v_item in select value from jsonb_array_elements(p_features) loop
+    v_codigo := btrim(v_item #>> '{properties,codigo}');
+    v_nome_talhao := coalesce(nullif(btrim(v_item #>> '{properties,nome}'), ''), v_codigo);
+    v_area_hectares := coalesce(
+      nullif(v_item #>> '{properties,area_hectares}', '')::numeric,
+      nullif(replace(regexp_replace(coalesce(v_item #>> '{properties,area}', ''), '[^0-9,.]', '', 'g'), ',', '.'), '')::numeric
+    );
+    v_coordenadas := v_item #> '{geometry,coordinates,0}';
+
+    if v_codigo is null or v_codigo = '' or length(v_codigo) > 40
+       or v_area_hectares is null or v_area_hectares <= 0
+       or v_coordenadas is null or jsonb_typeof(v_coordenadas) <> 'array' then
+      return jsonb_build_object('erro', 'Codigo, area ou coordenadas de talhao invalidos.');
+    end if;
+
+    insert into public.talhao (fazenda_id, codigo, nome, area_hectares, coordenadas)
+    values (p_fazenda_id, v_codigo, v_nome_talhao, v_area_hectares, v_coordenadas)
+    on conflict (fazenda_id, codigo) do update
+      set nome = excluded.nome,
+          area_hectares = excluded.area_hectares,
+          coordenadas = excluded.coordenadas,
+          atualizado_em = now();
+  end loop;
+
+  if cardinality(coalesce(p_removidos, '{}')) > 0 then
+    delete from public.talhao as t
+     where t.fazenda_id = p_fazenda_id
+       and t.codigo = any(p_removidos);
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', t.id,
+    'codigo', t.codigo,
+    'nome', t.nome,
+    'area_hectares', t.area_hectares,
+    'coordenadas', t.coordenadas
+  ) order by t.codigo), '[]'::jsonb)
+    into v_resultado
+    from public.talhao as t
+   where t.fazenda_id = p_fazenda_id;
+
+  return v_resultado;
+end;
+$$;
+
+revoke all on function public.salvar_geometrias_talhoes(uuid, jsonb, text[]) from public;
+grant execute on function public.salvar_geometrias_talhoes(uuid, jsonb, text[]) to service_role;
+
+create or replace function public.registrar_ocorrencia_com_alerta(
+  p_talhao_id uuid,
+  p_usuario_id uuid,
+  p_talhao_codigo text,
+  p_tipo text,
+  p_observacao text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  ocorrencia_criada public.ocorrencia;
+  alerta_criado public.alerta;
+  severidade_alerta public.severidade_alerta;
+begin
+  if p_talhao_id is null or p_usuario_id is null
+     or length(btrim(coalesce(p_tipo, ''))) = 0 then
+    raise exception 'Dados de ocorrencia invalidos.';
+  end if;
+
+  insert into public.ocorrencia (talhao_id, usuario_id, tipo, observacao)
+  values (p_talhao_id, p_usuario_id, btrim(p_tipo), nullif(btrim(p_observacao), ''))
+  returning * into ocorrencia_criada;
+
+  severidade_alerta := case
+    when lower(p_tipo) like '%praga%'
+      or lower(p_tipo) like '%doenca%'
+      or lower(p_tipo) like '%sensor%'
+      or lower(p_tipo) like '%agua%'
+      then 'alta'::public.severidade_alerta
+    else 'media'::public.severidade_alerta
+  end;
+
+  insert into public.alerta (talhao_id, severidade, status, titulo, mensagem)
+  values (
+    p_talhao_id,
+    severidade_alerta,
+    'aberto',
+    left('Ocorrencia de campo: ' || btrim(p_tipo), 255),
+    'Talhao ' || btrim(p_talhao_codigo) || ': ' ||
+      coalesce(nullif(btrim(p_observacao), ''), btrim(p_tipo))
+  )
+  returning * into alerta_criado;
+
+  return jsonb_build_object('ocorrencia', to_jsonb(ocorrencia_criada), 'alerta', to_jsonb(alerta_criado));
+end;
+$$;
+
+create or replace function public.registrar_problema_sensor_com_alerta(
+  p_sensor_id uuid,
+  p_talhao_id uuid,
+  p_usuario_id uuid,
+  p_talhao_codigo text,
+  p_sensor_codigo text,
+  p_data date,
+  p_problema text,
+  p_observacao text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  problema_criado public.problema_sensor;
+  alerta_criado public.alerta;
+begin
+  if p_talhao_id is null or p_usuario_id is null or p_data is null
+     or length(btrim(coalesce(p_problema, ''))) = 0 then
+    raise exception 'Dados de problema de sensor invalidos.';
+  end if;
+  if p_sensor_id is not null and not exists (
+    select 1
+    from public.sensor s
+    join public.dispositivo d on d.id = s.dispositivo_id
+    where s.id = p_sensor_id and d.talhao_id = p_talhao_id
+  ) then
+    raise exception 'O sensor nao pertence ao talhao informado.';
+  end if;
+
+  insert into public.problema_sensor
+    (sensor_id, talhao_id, usuario_id, data, problema, observacao)
+  values
+    (p_sensor_id, p_talhao_id, p_usuario_id, p_data, btrim(p_problema), nullif(btrim(p_observacao), ''))
+  returning * into problema_criado;
+
+  insert into public.alerta (sensor_id, talhao_id, severidade, status, titulo, mensagem)
+  values (
+    p_sensor_id,
+    p_talhao_id,
+    'alta',
+    'aberto',
+    left('Problema no sensor ' || btrim(coalesce(p_sensor_codigo, 'nao cadastrado')), 255),
+    'Talhao ' || btrim(p_talhao_codigo) || ': ' ||
+      coalesce(nullif(btrim(p_observacao), ''), btrim(p_problema))
+  )
+  returning * into alerta_criado;
+
+  return jsonb_build_object('problema', to_jsonb(problema_criado), 'alerta', to_jsonb(alerta_criado));
+end;
+$$;
+
+revoke all on function public.registrar_ocorrencia_com_alerta(uuid, uuid, text, text, text) from public;
+revoke all on function public.registrar_problema_sensor_com_alerta(uuid, uuid, uuid, text, text, date, text, text) from public;
+grant execute on function public.registrar_ocorrencia_com_alerta(uuid, uuid, text, text, text) to service_role;
+grant execute on function public.registrar_problema_sensor_com_alerta(uuid, uuid, uuid, text, text, date, text, text) to service_role;
+
 -- 5. Triggers de Consistência e Atualização
 create or replace function public.validar_dispositivo_da_leitura()
 returns trigger
@@ -441,6 +692,7 @@ alter table public.regra_alerta enable row level security;
 alter table public.alerta enable row level security;
 alter table public.colheita enable row level security;
 alter table public.evento_auditoria enable row level security;
+alter table public.relatorio_campo_diario enable row level security;
 
 -- Dados operacionais nao sao semeados; apenas registros reais devem ser cadastrados.
 
@@ -457,5 +709,7 @@ begin
 exception when others then
   null;
 end $$;
+
+notify pgrst, 'reload schema';
 
 commit;

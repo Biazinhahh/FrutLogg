@@ -7,10 +7,10 @@
 # ============================================================
 
 # ------------------------------------------------------------
-# 1. INSTALAR BIBLIOTECA
+# 1. INSTALAR BIBLIOTECA (execute no terminal, se necessário)
 # ------------------------------------------------------------
 
-pip -q install -U groq
+# pip install -U groq
 
 
 # ------------------------------------------------------------
@@ -21,6 +21,8 @@ import os
 import json
 import re
 import time
+import urllib.error
+import urllib.request
 from getpass import getpass
 
 from groq import Groq
@@ -52,6 +54,8 @@ client = Groq(api_key=GROQ_API_KEY)
 # ------------------------------------------------------------
 
 MODEL = "openai/gpt-oss-20b"
+FRUTLOG_API_URL = os.environ.get("FRUTLOG_API_URL", "http://localhost:3000/api").rstrip("/")
+FRUTLOG_API_TOKEN = os.environ.get("FRUTLOG_API_TOKEN", "").strip()
 
 
 # ------------------------------------------------------------
@@ -316,6 +320,38 @@ def montar_contexto(itens):
     return "\n\n".join(linhas)
 
 
+def consultar_contexto_operacional():
+
+    if not FRUTLOG_API_TOKEN:
+        return "Contexto operacional indisponivel: configure FRUTLOG_API_TOKEN."
+
+    requisicao = urllib.request.Request(
+        f"{FRUTLOG_API_URL}/chatbot/contexto",
+        headers={
+            "Authorization": f"Bearer {FRUTLOG_API_TOKEN}",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(requisicao, timeout=8) as resposta:
+            dados = json.loads(resposta.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as erro:
+        raise RuntimeError(f"Falha ao consultar contexto operacional do FrutLog: {erro}") from erro
+
+    ocorrencias = dados.get("ocorrencias")
+    sensores = dados.get("sensores")
+    if not isinstance(ocorrencias, list) or not isinstance(sensores, list):
+        raise RuntimeError("A API do FrutLog retornou contexto operacional invalido.")
+
+    return (
+        "Ocorrencias recentes:\n"
+        + json.dumps(ocorrencias, ensure_ascii=False)
+        + "\nStatus dos sensores:\n"
+        + json.dumps(sensores, ensure_ascii=False)
+    )
+
+
 # ------------------------------------------------------------
 # 11. INSTRUÇÕES DO CHATBOT
 # ------------------------------------------------------------
@@ -424,6 +460,7 @@ def responder(pergunta):
     )
 
     contexto = montar_contexto(itens_relevantes)
+    contexto_operacional = consultar_contexto_operacional()
 
 
     # --------------------------------------------------------
@@ -436,6 +473,10 @@ def responder(pergunta):
 CONTEXTO DA BASE DE CONHECIMENTO:
 
 {contexto}
+
+CONTEXTO OPERACIONAL ATUAL DO FRUTLOG:
+
+{contexto_operacional}
 """
 
 

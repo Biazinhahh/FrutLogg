@@ -38,11 +38,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   let talhaoArrastado = null;
   let graficoColheita = null;
   let unidadeAtual = "t";
+  let sensoresDoPainel = [];
 
   let colheitas = [];
 
   function classeStatus(status) {
-    return String(status).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return String(status)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "-");
   }
 
   function formatarData(dataISO) {
@@ -91,44 +96,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderizarMapa() {
     if (!svgMapa) return;
 
-    svgMapa.innerHTML = "";
     const pendentes = talhoes.filter((feature) => feature.properties.geometriaPendente).length;
     preencherTexto(
       "mensagem-geometria-talhoes",
       pendentes ? `${pendentes} talhao(es) ainda sem geometria. Selecione cada um e use Criar para desenhar seus limites.` : ""
     );
 
-    talhoes.forEach((feature) => {
-      const codigo = feature.properties.codigo;
-      const status = atualizarStatusTalhao(feature);
-      const poligono = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-
-      poligono.setAttribute("points", pontosParaString(obterPontos(feature)));
-      poligono.dataset.talhao = codigo;
-      poligono.classList.add("talhao-mapa", `status-${classeStatus(status)}`);
-      poligono.classList.toggle("selecionado", codigo === talhaoSelecionado);
-      poligono.addEventListener("click", (evento) => {
+    FrutLogMapaTalhoes.renderizarMapaTalhoes(svgMapa, talhoes, {
+      selectedCode: talhaoSelecionado,
+      statusFor: atualizarStatusTalhao,
+      onSelect: (feature, evento) => {
         if (modoCriacao || modoDivisao) return;
         evento.stopPropagation();
-        if (!talhaoArrastado?.moveu) selecionarTalhao(codigo);
-      });
-      poligono.addEventListener("pointerdown", (evento) => {
-        if (!modoEdicao || modoCriacao || modoDivisao || codigo !== talhaoSelecionado) return;
-        evento.preventDefault();
-        talhaoArrastado = {
-          codigo,
-          origem: obterPontoSvg(evento),
-          moveu: false,
-        };
-      });
+        if (!talhaoArrastado?.moveu) selecionarTalhao(feature.properties.codigo);
+      },
+      onPolygon: (poligono, feature) => {
+        const codigo = feature.properties.codigo;
+        poligono.addEventListener("pointerdown", (evento) => {
+          if (!modoEdicao || modoCriacao || modoDivisao || codigo !== talhaoSelecionado) return;
+          evento.preventDefault();
+          talhaoArrastado = {
+            codigo,
+            origem: obterPontoSvg(evento),
+            moveu: false,
+          };
+        });
 
-      svgMapa.appendChild(poligono);
-
-      if (modoEdicao && codigo === talhaoSelecionado) {
-        renderizarVertices(feature);
-      }
+        if (modoEdicao && codigo === talhaoSelecionado) {
+          renderizarVertices(feature);
+        }
+      },
     });
 
+    /* Os overlays de edição permanecem exclusivos do Engenheiro. */
     if (modoCriacao && pontosCriacao.length > 0) {
       const rascunho = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
       rascunho.setAttribute("points", pontosParaString(pontosCriacao));
@@ -166,13 +166,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     svgMapa.appendChild(grupo);
   }
 
+  /*
+   * O mapa compartilhado desenha apenas os polígonos persistidos; o engenheiro
+   * acrescenta os pontos de edição e os traçados temporários acima.
+   */
+
   function atualizarSelectCadastro() {
     const select = document.getElementById("talhao");
     if (!select) return;
 
-    select.innerHTML = '<option value="">Selecione o talhao</option>' + talhoes
-      .map((feature) => `<option value="${feature.properties.codigo}">${feature.properties.codigo}</option>`)
+    const atual = select.value;
+    const opcoes = talhoes
+      .map((feature) => {
+        const codigo = String(feature.properties.codigo).replace(/[&<>"']/g, (caractere) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[caractere]);
+        return `<option value="${codigo}">${codigo}</option>`;
+      })
       .join("");
+    select.innerHTML = `<option value="">${opcoes ? "Selecione o talhao" : "Nenhum talhao carregado"}</option>${opcoes}`;
+    if (talhoes.some((feature) => feature.properties.codigo === atual)) select.value = atual;
+    atualizarSensoresDoTalhao();
+  }
+
+  function atualizarSensoresDoTalhao() {
+    const select = document.getElementById("sensor-associado");
+    if (!select) return;
+    const codigoTalhao = document.getElementById("talhao")?.value;
+    const sensores = sensoresDoPainel.filter((sensor) => sensor.talhao === codigoTalhao && sensor.ativo);
+    if (!sensores.length) {
+      select.innerHTML = '<option>Nenhum sensor ativo cadastrado para este talhao</option>';
+      select.disabled = true;
+      return;
+    }
+    select.innerHTML = sensores.map((sensor) => {
+      const situacao = sensor.status === "Online" ? "Online" : "Cadastrado, aguardando leitura";
+      return `<option>${sensor.sensor} - ${sensor.tipo} (${situacao})</option>`;
+    }).join("");
+    select.disabled = false;
   }
 
   function atualizarControlesEdicao() {
@@ -663,6 +698,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       mensagemPlantio.textContent = "Plantio cadastrado no banco de dados.";
       mensagemPlantio.className = "mensagem-feedback sucesso";
       formularioPlantio.reset();
+      FrutLog.notificarAtualizacaoTalhoes();
     } catch (erro) {
       mensagemPlantio.textContent = erro.message;
       mensagemPlantio.className = "mensagem-feedback erro";
@@ -672,8 +708,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function carregarDadosPainel() {
-    const respostaTalhoes = await FrutLog.apiFetch("/talhoes");
-    const talhoesServidor = FrutLogTalhoes.carregarDoServidor(respostaTalhoes.talhoes || []);
+    const talhoesServidor = await FrutLogMapaTalhoes.carregarMapaTalhoes("engenheiro");
     talhoes = talhoesServidor;
     mapaApiPronto = true;
     talhaoSelecionado = obterFeature(talhaoSelecionado)?.properties.codigo || talhoes[0]?.properties.codigo || "";
@@ -701,6 +736,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const sensoresPorTalhao = new Map();
+    sensoresDoPainel = painel.sensores || [];
     (painel.sensores || []).forEach((sensor) => {
       if (!sensoresPorTalhao.has(sensor.talhao)) sensoresPorTalhao.set(sensor.talhao, []);
       sensoresPorTalhao.get(sensor.talhao).push(sensor);
@@ -883,6 +919,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  document.getElementById("talhao")?.addEventListener("change", atualizarSensoresDoTalhao);
   formularioPlantio?.addEventListener("submit", registrarPlantio);
   window.addEventListener("frutlog:colheitas-atualizadas", async () => {
     try {

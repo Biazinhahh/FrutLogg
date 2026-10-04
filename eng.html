@@ -273,8 +273,10 @@
         </div>
       </div>
       <div class="item-detalhe-cadastro">
-        <label class="label" for="sensor-associado">Sensor associado</label>
-        <input type="text" id="sensor-associado" name="sensor" class="campo-formulario" placeholder="Ex.: ESP32-01">
+        <label class="label" for="sensor-associado">Sensores cadastrados neste talhão</label>
+        <select id="sensor-associado" class="campo-formulario" disabled>
+          <option>Nenhum sensor ativo cadastrado para este talhão</option>
+        </select>
       </div>
     </div>
 
@@ -314,8 +316,9 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="js/global.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/frutlog-talhoes.js"></script>
+<script src="js/mapa-talhoes.js"></script>
 <script src="js/relatorios.js"></script>
 <script src="js/telemetria-thingspeak.js"></script>
 <script src="js/colheitas.js"></script>

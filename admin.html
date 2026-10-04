@@ -186,11 +186,12 @@
       <div class="tabelas-consolidadas-admin">
         <article>
           <h3>Talhoes e monitoramento</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhao</th><th>Cultura</th><th>Area</th><th>Sensor</th><th>Leitura</th><th>Situacao</th><th>Prioridade</th></tr></thead><tbody id="tabela-talhoes-admin"></tbody></table></div>
+          <p class="texto-ajuda">Talhões, áreas, plantios e sensores vêm dos registros da fazenda. Situação e prioridade são calculadas com base no cadastro e nas leituras dos sensores.</p>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhao</th><th>Produto / variedade</th><th>Area</th><th>Sensor</th><th>Leitura</th><th>Situacao</th><th>Prioridade</th></tr></thead><tbody id="tabela-talhoes-admin"></tbody></table></div>
         </article>
         <article>
           <h3>Inspecoes recentes</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhao</th><th>Situacao</th><th>Problemas</th><th>Observacoes</th></tr></thead><tbody id="tabela-inspecoes-admin"></tbody></table></div>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhao</th><th>Sensor</th><th>Situacao</th><th>Problemas</th><th>Observacoes</th></tr></thead><tbody id="tabela-inspecoes-admin"></tbody></table></div>
         </article>
         <article>
           <h3>Plantios ativos</h3>
@@ -283,6 +284,7 @@
         <img src="imagem/mapa-FrutLog.jpg" alt="Mapa aereo dos talhoes" class="mapa-imagem">
         <svg id="mapa-talhoes-admin" class="camada-talhoes" viewBox="0 0 500 400" preserveAspectRatio="none" aria-label="Talhoes cadastrados"></svg>
       </div>
+      <p id="mensagem-mapa-admin" class="texto-ajuda" aria-live="polite"></p>
 
       <div class="legenda-mapa">
         <div class="legenda-item"><span class="legenda-cor legenda-normal"></span><span>Normal</span></div>
@@ -324,17 +326,33 @@
   </main>
 
 
-  <button id="chatbot" class="chatbot" type="button" aria-label="Abrir assistente">
+  <section id="painel-chatbot" class="painel-chatbot" aria-label="Assistente FrutLog" hidden>
+    <header class="cabecalho-chatbot">
+      <strong>Assistente FrutLog</strong>
+      <button id="fechar-chatbot" type="button" aria-label="Fechar assistente">×</button>
+    </header>
+    <div id="mensagens-chatbot" class="mensagens-chatbot" aria-live="polite">
+      <p class="mensagem-chatbot">Pergunte sobre ocorrências recentes ou o estado dos sensores.</p>
+    </div>
+    <form id="form-chatbot" class="form-chatbot">
+      <label class="sr-only" for="pergunta-chatbot">Sua pergunta</label>
+      <input id="pergunta-chatbot" name="pergunta" maxlength="300" autocomplete="off" placeholder="Digite sua pergunta" required>
+      <button type="submit">Enviar</button>
+    </form>
+  </section>
+  <button id="chatbot" class="chatbot" type="button" aria-label="Abrir assistente" aria-expanded="false" aria-controls="painel-chatbot">
     <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
   </button>
 
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="js/global.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/frutlog-talhoes.js"></script>
+  <script src="js/mapa-talhoes.js"></script>
   <script src="js/relatorios.js"></script>
   <script src="js/telemetria-thingspeak.js"></script>
   <script src="js/colheitas.js"></script>
+  <script src="js/chatbot.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>
