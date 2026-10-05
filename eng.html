@@ -34,37 +34,46 @@
 
 <main class="conteudo-dashboard">
 <section class="topo" aria-labelledby="titulo-dashboard">
-  <h1 id="titulo-dashboard">Monitoramento da Producao</h1>
-  <p>Acompanhamento dos produtos em desenvolvimento nos talhoes.</p>
+  <h1 id="titulo-dashboard">Monitoramento da Producão</h1>
+  <p>Acompanhamento dos produtos em desenvolvimento nos talhões.</p>
 </section>
 
-<section id="monitoramento" class="secao-mapa-detalhes" aria-label="Monitoramento dos talhoes">
+<section id="monitoramento" class="secao-mapa-detalhes" aria-label="Monitoramento dos talhões">
   <div class="cartao cartao-mapa-wrapper">
     <div class="mapa-header">
       <div>
-        <h2>Visao dos Talhoes</h2>
-        <p>Selecione um talhao para visualizar seus dados.</p>
+        <h2>Visao dos Talhões</h2>
+        <p>Selecione um talhão para visualizar seus dados.</p>
       </div>
-      <div class="botoes-do-talhao" id="botoes-talhao" aria-label="Selecao de talhao"></div>
+      <div class="botoes-do-talhao" id="botoes-talhao" aria-label="Selecao de talhão"></div>
       <span class="status-mapa">Monitoramento Ativo</span>
     </div>
 
-    <div class="barra-edicao-talhao" aria-label="Ferramentas de edicao de talhoes">
-      <button class="btn-filtro" type="button" id="btn-editar-talhoes">Editar Talhoes</button>
+    <div class="barra-edicao-talhao" aria-label="Ferramentas de edicao de talhões">
+      <button class="btn-filtro" type="button" id="btn-editar-talhoes">Editar Talhões</button>
       <button class="btn-filtro" type="button" id="btn-criar-talhao" disabled>Criar</button>
       <button class="btn-filtro" type="button" id="btn-dividir-talhao" disabled>Dividir</button>
       <button class="btn-filtro" type="button" id="btn-excluir-talhao" disabled>Excluir</button>
       <button class="btn-filtro" type="button" id="btn-salvar-talhao" disabled>Salvar</button>
       <button class="btn-filtro" type="button" id="btn-cancelar-talhao" disabled>Cancelar</button>
-      <label for="talhao-area-hectares">Area do talhao (ha)</label>
-      <input id="talhao-area-hectares" class="campo-formulario" type="number" min="0.01" step="0.01" inputmode="decimal" aria-label="Area do talhao em hectares">
+      <label for="talhao-area-hectares">Area do talhão (ha)</label>
+
+      <input id="talhao-area-hectares" class="campo-formulario" type="number" min="0.01" step="0.01" inputmode="decimal" aria-label="Area do talhão em hectares">
+
       <button class="btn-filtro" type="button" id="btn-aplicar-area-talhao" disabled>Aplicar area</button>
     </div>
-    <p class="mensagem-feedback" id="mensagem-edicao-talhao" aria-live="polite"></p>
 
+    <p class="mensagem-feedback" id="mensagem-edicao-talhao" aria-live="polite"></p>
+<!-- SVG sao os nosso pontos de referencia pra trilhas  ou criar divisa para talhao . -->
     <div class="mapa-container">
-      <img src="imagem/mapa-FrutLog.jpg" alt="Mapa aereo dos talhoes" class="mapa-imagem">
-      <svg class="camada-talhoes" id="camada-talhoes" viewBox="0 0 500 400" preserveAspectRatio="none" aria-label="Talhoes da fazenda"></svg>
+      <img src="imagem/mapa-FrutLog.jpg" alt="Mapa aereo dos talhões" class="mapa-imagem">
+     
+      <svg class="camada-talhoes" id="camada-talhoes"
+       viewBox="0 0 500 400"
+        preserveAspectRatio="none" 
+        aria-label="Talhões da fazenda">
+      </svg>
+
     </div>
     <p class="texto-ajuda" id="mensagem-geometria-talhoes" aria-live="polite"></p>
 
@@ -79,7 +88,7 @@
   <div class="cartao card-detalhes-elegante">
     <div class="cabecalho-detalhes">
       <span class="badge-status" id="talhao-status">Normal</span>
-      <h2 class="titulo-talhao" id="titulo-talhao">Detalhes: Talhao A1</h2>
+      <h2 class="titulo-talhao" id="titulo-talhao">Detalhes: Talhão A1</h2>
     </div>
 
     <div class="info-grid-detalhes">
@@ -155,7 +164,12 @@
   <p class="mensagem-feedback" data-thingspeak-status aria-live="polite">Carregando canal ThingSpeak...</p>
   <div class="thingspeak-summary" data-thingspeak-summary></div>
   <div class="thingspeak-embeds" aria-label="Graficos ThingSpeak em tempo real">
-    <article><h3>Temperatura</h3><div class="container-iframe"><iframe data-thingspeak-embed="temperatura" title="Grafico de temperatura ThingSpeak" loading="lazy"></iframe></div></article>
+    <article>
+      <h3>Temperatura</h3>
+      <div class="container-iframe"><iframe data-thingspeak-embed="temperatura" title="Grafico de temperatura ThingSpeak" loading="lazy"></iframe>
+      </div>
+    </article>
+
     <article><h3>Umidade do ar</h3><div class="container-iframe"><iframe data-thingspeak-embed="umidadeAr" title="Grafico de umidade do ar ThingSpeak" loading="lazy"></iframe></div></article>
   </div>
   <div class="thingspeak-chart"><canvas aria-label="Historico recente das metricas do ThingSpeak"></canvas></div>
