@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="css/dashboard.css">
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <title>FrutLog - Administracao</title>
+  <title>FrutLog - Administração</title>
 </head>
 
 <body class="layout-dashboard">
@@ -18,14 +18,14 @@
     </div>
 
     <nav class="menu" aria-label="Menu administrativo">
-      <a href="#funcionarios" class="nav-link active"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Funcionarios</a>
+      <a href="#funcionários" class="nav-link active"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Funcionários</a>
       <a href="#sensores-admin" class="nav-link"><i class="fa-solid fa-microchip" aria-hidden="true"></i> Sensores</a>
-      <a href="#resumo-tecnico" class="nav-link"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Dados de Campo</a>
+      <a href="#resumo-técnico" class="nav-link"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Dados de Campo</a>
       <a href="#colheitas-admin" class="nav-link"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Colheitas</a>
       <a href="#telemetria-admin" class="nav-link"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> Telemetria</a>
-      <a href="#relatorios-diarios" class="nav-link"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> Relatorios Recebidos</a>
+      <a href="#relatórios-diarios" class="nav-link"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> Relatórios Recebidos</a>
       <a href="#mapa-fazenda" class="nav-link"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Mapa</a>
-      <a href="#graficos" class="nav-link"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Graficos</a>
+      <a href="#gráficos" class="nav-link"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Gráficos</a>
     </nav>
     
     <div class="sidebar-acoes">
@@ -35,22 +35,22 @@
 
   <main class="conteudo-dashboard">
     <section class="topo">
-      <h1>Administracao do Sistema</h1>
-      <p>Gestao integrada da equipe, sensores, talhoes e operacao de campo.</p>
+      <h1>Administração do Sistema</h1>
+      <p>Gestão integrada da equipe, sensores, talhões e operação de campo.</p>
       <p id="mensagem-carregamento-admin" class="mensagem-feedback" aria-live="polite"></p>
     </section>
 
     <section id="funcionarios" class="cartao">
       <div class="cabecalho-cadastro">
         <span class="badge-status">Equipe</span>
-        <h2 class="titulo-talhao">Cadastro de Funcionarios</h2>
+        <h2 class="titulo-talhao">Cadastro de Funcionários</h2>
       </div>
 
       <form id="form-funcionario">
         <input type="hidden" id="funcionario-id" name="id">
         <div class="info-grid-cadastro">
           <div class="item-detalhe-cadastro">
-            <label class="label" for="funcionario-matricula">Matricula</label>
+            <label class="label" for="funcionario-matricula">Matrícula</label>
             <input id="funcionario-matricula" name="matricula" class="campo-formulario" readonly required>
             <span class="texto-ajuda">Gerada automaticamente pelo sistema.</span>
           </div>
@@ -62,11 +62,11 @@
 
           <div class="item-detalhe-cadastro">
             <label class="label" for="funcionario-cargo">Cargo</label>
-            <input id="funcionario-cargo" name="cargo" class="campo-formulario" placeholder="Ex.: Tecnico agricola" required>
+            <input id="funcionario-cargo" name="cargo" class="campo-formulario" placeholder="Ex.: Técnico agrícola" required>
           </div>
           
           <!-- desativado por hora <div class="item-detalhe-cadastro">
-            <label class="label" for="funcionario-profissao">Profissao</label>
+            <label class="label" for="funcionario-profissao">Profissão</label>
             <input id="funcionario-profissao" name="profissao" class="campo-formulario" maxlength="160" required>
           </div> -->
 
@@ -75,7 +75,7 @@
             <select id="funcionario-perfil" name="perfil" class="campo-formulario" required>
               <option value="">Selecione</option>
               <option value="engenheiro">Engenheiro</option>
-              <option value="tecnico">Tecnico</option>
+              <option value="tecnico">Técnico</option>
               <option value="admin">Admin</option>
             </select>
           </div>
@@ -90,7 +90,7 @@
 
           <div class="item-detalhe-cadastro">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <label class="label" for="funcionario-senha" style="margin-bottom:0;">Senha provisoria</label>
+              <label class="label" for="funcionario-senha" style="margin-bottom:0;">Senha provisória</label>
               <button type="button" id="btn-gerar-senha" style="background:none; border:none; color:var(--cor-destaque); font-size:0.8rem; cursor:pointer; font-weight:600;"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Gerar automatica</button>
             </div>
 
@@ -100,21 +100,21 @@
               <button type="button" class="btn-secundario" id="btn-copiar-senha">Copiar senha</button>
             </div>
 
-            <span class="texto-ajuda">O funcionario devera troca-la no primeiro acesso.</span>
+            <span class="texto-ajuda">O funcionário deverá trocá-la no primeiro acesso.</span>
           </div>
         </div>
         <p class="mensagem-feedback" id="mensagem-funcionario" aria-live="polite"></p>
         <div class="area-botao-cadastro">
-          <button id="btn-salvar-funcionario" type="submit" class="btn-primario"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Cadastrar Funcionario</button>
-          <button id="btn-cancelar-edicao-funcionario" type="button" class="btn-secundario" hidden>Cancelar edicao</button>
+          <button id="btn-salvar-funcionario" type="submit" class="btn-primario"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Cadastrar Funcionário</button>
+          <button id="btn-cancelar-edicao-funcionario" type="button" class="btn-secundario" hidden>Cancelar edição</button>
         </div>
       </form>
 
       <div class="subsecao-admin">
-        <div class="titulo-cartao"><i class="fa-solid fa-address-book" aria-hidden="true"></i> Funcionarios Cadastrados</div>
+        <div class="titulo-cartao"><i class="fa-solid fa-address-book" aria-hidden="true"></i> Funcionários Cadastrados</div>
         <div class="filtros-admin">
-          <label for="filtro-funcionarios">Buscar funcionario</label>
-          <input id="filtro-funcionarios" class="campo-formulario" type="search" placeholder="Nome, matricula ou cargo">
+          <label for="filtro-funcionarios">Buscar funcionário</label>
+          <input id="filtro-funcionarios" class="campo-formulario" type="search" placeholder="Nome, matrícula ou cargo">
           <label for="filtro-status-funcionarios">Exibir</label>
           <select id="filtro-status-funcionarios" class="campo-formulario">
             <option value="todos">Todos</option>
@@ -127,13 +127,13 @@
           <table class="tabela-dados">
             <thead>
               <tr>
-                <th>Matricula</th>
+                <th>Matrícula</th>
                 <th>Nome</th>
                 <th>Cargo</th>
-                <!-- <th>Profissao</th> -->
+                <!-- <th>Profissão</th> -->
                 <th>Perfil</th>
                 <th>Status</th>
-                <th>Acoes</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody id="tabela-funcionarios"></tbody>
@@ -145,7 +145,7 @@
     <section id="sensores-admin" class="cartao">
       <div class="cabecalho-cadastro">
         <span class="badge-status">IoT</span>
-        <h2 class="titulo-talhao">Gestao de Sensores</h2>
+        <h2 class="titulo-talhao">Gestão de Sensores</h2>
       </div>
       <form id="form-sensor">
         <div class="info-grid-cadastro">
@@ -159,7 +159,7 @@
           </div>
 
           <div class="item-detalhe-cadastro">
-            <label class="label" for="sensor-tipo">Metrica</label>
+            <label class="label" for="sensor-tipo">Métrica</label>
             <select id="sensor-tipo" name="tipo" class="campo-formulario" required>
               <option value="">Selecione</option>
               <option value="temperatura">Temperatura</option>
@@ -187,10 +187,10 @@
             <tr>
             <th>Identificador</th>
             <th>Talhão</th>
-            <th>Metrica</th>
+            <th>Métrica</th>
             <th>Leitura</th>
             <th>Status</th>
-            <th>Acoes</th>
+            <th>Ações</th>
           </tr>
         </thead>
           <tbody id="tabela-sensores-admin"></tbody>
@@ -199,12 +199,12 @@
     </section>
 
     <section id="resumo-tecnico" class="cartao">
-      <div class="titulo-cartao"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Visao Consolidada da Operacao</div>
+      <div class="titulo-cartao"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Visão Consolidada da Operação</div>
       <p id="mensagem-dados-tecnicos" class="mensagem-feedback" aria-live="polite"></p>
       <div class="resumo-admin">
-        <article><span>Talhoes</span><strong id="resumo-total-talhoes">--</strong></article>
+        <article><span>Talhões</span><strong id="resumo-total-talhoes">--</strong></article>
         <article><span>Sensores</span><strong id="resumo-total-sensores">--</strong></article>
-        <article><span>Inspecoes</span><strong id="resumo-total-inspecoes">--</strong></article>
+        <article><span>Inspecções</span><strong id="resumo-total-inspecoes">--</strong></article>
         <article><span>Tarefas pendentes</span><strong id="resumo-total-tarefas">--</strong></article>
         <article><span>Alertas abertos</span><strong id="resumo-total-alertas">--</strong></article>
       </div>
@@ -218,10 +218,10 @@
               <tr>
                 <th>Talhão</th>
                 <th>Produto / variedade</th>
-                <th>Area</th>
+                <th>Área</th>
                 <th>Sensor</th>
                 <th>Leitura</th>
-                <th>Situacao</th>
+                <th>Situação</th>
                 <th>Prioridade</th>
               </tr>
             </thead>
@@ -232,12 +232,12 @@
     </section>
 
     <section id="resumo-tecnico" class="cartao">
-      <div class="titulo-cartao"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Visao Consolidada da Operacao</div>
+      <div class="titulo-cartao"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Visão Consolidada da Operação</div>
       <p id="mensagem-dados-tecnicos" class="mensagem-feedback" aria-live="polite"></p>
       <div class="resumo-admin">
-        <article><span>Talhoes</span><strong id="resumo-total-talhoes">--</strong></article>
+        <article><span>Talhões</span><strong id="resumo-total-talhoes">--</strong></article>
         <article><span>Sensores</span><strong id="resumo-total-sensores">--</strong></article>
-        <article><span>Inspecoes</span><strong id="resumo-total-inspecoes">--</strong></article>
+        <article><span>Inspecções</span><strong id="resumo-total-inspecoes">--</strong></article>
         <article><span>Tarefas pendentes</span><strong id="resumo-total-tarefas">--</strong></article>
         <article><span>Alertas abertos</span><strong id="resumo-total-alertas">--</strong></article>
       </div>
@@ -251,10 +251,10 @@
               <tr>
                 <th>Talhão</th>
                 <th>Produto / variedade</th>
-                <th>Area</th>
+                <th>Área</th>
                 <th>Sensor</th>
                 <th>Leitura</th>
-                <th>Situacao</th>
+                <th>Situação</th>
                 <th>Prioridade</th>
               </tr>
             </thead>
@@ -265,8 +265,8 @@
 
         <article>
           <h3>Plantios ativos</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhao</th><th>Produto / variedade</th><th>Area</th><th>Plantio</th>
-            <th>Previsao de colheita</th>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhão</th><th>Produto / variedade</th><th>Área</th><th>Plantio</th>
+            <th>Previsão de colheita</th>
           </tr>
         </thead>
         <tbody id="tabela-plantios-admin"></tbody>
@@ -275,23 +275,23 @@
         </article>
 
         <article>
-          <h3>Ocorrencias de campo</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhao</th><th>Tipo</th><th>Observacao</th></tr></thead><tbody id="tabela-ocorrencias-admin"></tbody></table></div>
+          <h3>Ocorrências de campo</h3>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhão</th><th>Tipo</th><th>Observação</th></tr></thead><tbody id="tabela-ocorrencias-admin"></tbody></table></div>
         </article>
 
         <article>
           <h3>Problemas em sensores</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Sensor</th><th>Talhao</th><th>Problema</th><th>Observacao</th></tr></thead><tbody id="tabela-problemas-admin"></tbody></table></div>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Data</th><th>Sensor</th><th>Talhão</th><th>Problema</th><th>Observação</th></tr></thead><tbody id="tabela-problemas-admin"></tbody></table></div>
         </article>
 
         <article>
           <h3>Tarefas e alertas</h3>
-          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhao / assunto</th><th>Prioridade</th><th>Descricao</th><th>Status</th></tr></thead><tbody id="tabela-alertas-admin"></tbody></table></div>
+          <div class="tabela-responsiva"><table class="tabela-dados"><thead><tr><th>Talhão / assunto</th><th>Prioridade</th><th>Descrição</th><th>Status</th></tr></thead><tbody id="tabela-alertas-admin"></tbody></table></div>
         </article>
 
         <article>
-          <h3>Telemetria diaria consolidada</h3>
-          <div class="tabela-responsiva thingspeak-feed-scroll"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhão</th><th>Metrica</th><th>Media</th><th>Minimo</th><th>Maximo</th><th>Leituras</th></tr></thead><tbody id="tabela-telemetria-admin"></tbody></table></div>
+          <h3>Telemetria diária consolidada</h3>
+          <div class="tabela-responsiva thingspeak-feed-scroll"><table class="tabela-dados"><thead><tr><th>Data</th><th>Talhão</th><th>Métrica</th><th>Média</th><th>Mínimo</th><th>Máximo</th><th>Leituras</th></tr></thead><tbody id="tabela-telemetria-admin"></tbody></table></div>
         </article>
 
       </div>
@@ -344,19 +344,19 @@
     </section>
 
     <section id="relatorios-diarios" class="cartao">
-      <div class="titulo-cartao"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> Relatorios diarios recebidos</div>
+      <div class="titulo-cartao"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> Relatórios diários recebidos</div>
 
       <div class="filtros-relatorios">
-        <label for="filtro-relatorio-texto">Tecnico ou texto</label>
-        <input id="filtro-relatorio-texto" class="campo-formulario" type="search" placeholder="Buscar relatorio">
+        <label for="filtro-relatorio-texto">Técnico ou texto</label>
+        <input id="filtro-relatorio-texto" class="campo-formulario" type="search" placeholder="Buscar relatório">
         <label for="filtro-relatorio-data">Data</label>
         <input id="filtro-relatorio-data" class="campo-formulario" type="date">
         <label for="filtro-relatorio-status">Status</label>
         <select id="filtro-relatorio-status" class="campo-formulario">
           <option value="todos">Todos</option>
           <option value="enviado">Enviado</option>
-          <option value="em_analise">Em analise</option>
-          <option value="concluido">Concluido</option>
+          <option value="em_analise">Em análise</option>
+          <option value="concluido">Concluído</option>
         </select>
       </div>
 
@@ -364,8 +364,8 @@
       <div class="tabela-responsiva">
         <table class="tabela-dados">
           <thead><tr><th>Data</th>
-            <th>Tecnico</th>
-            <th>Relatorio de campo</th>
+            <th>Técnico</th>
+            <th>Relatório de campo</th>
             <th>Status</th>
             <th>Acompanhamento</th>
           </tr></thead>
@@ -391,8 +391,8 @@
 
       <div class="legenda-mapa">
         <div class="legenda-item"><span class="legenda-cor legenda-normal"></span><span>Normal</span></div>
-        <div class="legenda-item"><span class="legenda-cor legenda-atencao"></span><span>Atencao</span></div>
-        <div class="legenda-item"><span class="legenda-cor legenda-critico"></span><span>Critico</span></div>
+        <div class="legenda-item"><span class="legenda-cor legenda-atencao"></span><span>Atenção</span></div>
+        <div class="legenda-item"><span class="legenda-cor legenda-critico"></span><span>Crítico</span></div>
         <div class="legenda-item"><span class="legenda-cor legenda-selecao"></span><span>Selecionado</span></div>
       </div>
     </section>
@@ -400,7 +400,7 @@
     <section id="graficos" class="admin-graficos">
       <article class="cartao">
         <div class="header-grafico">
-          <div><div class="titulo-cartao"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Historico Anual de Colheitas</div></div>
+          <div><div class="titulo-cartao"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Histórico Anual de Colheitas</div></div>
           <div class="filtros-grafico" aria-label="Unidade do grafico de colheita">
             <button class="btn-filtro active" type="button" data-unidade-admin="t">Toneladas (t)</button>
             <button class="btn-filtro" type="button" data-unidade-admin="sc">Sacas (sc)</button>
@@ -409,7 +409,7 @@
           </div>
         </div>
         <div class="resumo-colheita-admin">
-          <p>Ultima colheita: <strong id="resumo-colheita-ultima">--</strong></p>
+          <p>Última colheita: <strong id="resumo-colheita-ultima">--</strong></p>
           <p>Menor ano: <strong id="resumo-colheita-menor">--</strong></p>
           <p>Maior ano: <strong id="resumo-colheita-maior">--</strong></p>
         </div>
