@@ -78,45 +78,46 @@
   pointer-events: none;
 }
 
-.card-grafico-thingspeak{ 
+.card-grafico-thingspeak {
 
   width: 100%;
-  margin:0 0 20px 0;
+  margin: 0 0 20px 0;
 
 }
 
-.container-iframe{
-   width: 100%;
-   aspect-ratio: 16/9;
-   height: 300px;
-   overflow: hidden;
-   border-radius: 8px;
-}
-.container-iframe iframe{
+.container-iframe {
   width: 100%;
-  height: 90%; 
+  aspect-ratio: 16/9;
+  height: 300px;
   overflow: hidden;
-  border:none;
+  border-radius: 8px;
+}
+
+.container-iframe iframe {
+  width: 100%;
+  height: 90%;
+  overflow: hidden;
+  border: none;
   display: block;
   justify-content: center;
   align-items: center;
 }
 
 
-.card-grafico-thingspeak >h1{
-  margin:  0 0 20px 0;
+.card-grafico-thingspeak>h1 {
+  margin: 0 0 20px 0;
   font-size: 1.5rem;
   color: black;
 }
 
- .graficos-thingspeak{
+.graficos-thingspeak {
   display: grid;
-  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
   width: 100%;
- }
+}
 
- .graficos-thingspeak-item{
+.graficos-thingspeak-item {
   min-width: 0;
   padding: 18px;
   background-color: var(--cor-card);
@@ -128,15 +129,21 @@
   box-sizing: border-box;
   overflow: hidden;
   align-items: center;
- }
+}
 
- .graficos-thingspeak-item h2{
+.graficos-thingspeak-item h2 {
   margin: 0 0 15px 0;
   font-size: 1rem;
   color: var(--cor-texto-escuro);
   width: 100%;
 
- }
+}
+
+.grafico-clima-mensal {
+  position: relative;
+  width: 100%;
+  height: 350px;
+}
 
 
 
